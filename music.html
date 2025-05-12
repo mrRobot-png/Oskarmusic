@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My Music</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: black;
+      color: #00ffff;
+      text-align: center;
+      font-family: 'Orbitron', sans-serif;
+      padding: 20px;
+    }
+    input[type="text"] {
+      padding: 10px;
+      font-size: 18px;
+      border-radius: 5px;
+      width: 60%;
+      border: 2px solid #00ffff;
+      background-color: black;
+      color: #00ffff;
+      margin-bottom: 20px;
+    }
+    .song-list {
+      list-style: none;
+      padding: 0;
+    }
+    .song-list li {
+      margin: 10px 0;
+    }
+    audio {
+      width: 80%;
+    }
+  </style>
+</head>
+<body>
+  <h1>Available Tracks</h1>
+  <input type="text" id="searchBar" placeholder="Search music..." onkeyup="searchSongs()">
+
+  <ul class="song-list" id="musicList">
+    <li><strong>My Fav (cowboy last ride):</strong> <audio controls src="ACowboy'sLastRide.mp3"></audio></li>
+    <li><strong>My Fav number 2 (Andrea Bocelli-Hallelujah):</strong> <audio controls src="AndreaBocelliHallelujah.mp3"></audio></li>
+    <li><strong>My fav number 3(mother by danzig):</strong> <audio controls src="Danzig-Mother.mp3"></audio></li>
+  </ul>
+
+  <script>
+    function searchSongs() {
+      const input = document.getElementById("searchBar").value.toLowerCase();
+      const songs = document.querySelectorAll("#musicList li");
+
+      songs.forEach(song => {
+        song.style.display = song.textContent.toLowerCase().includes(input) ? "" : "none";
+      });
+    }
+  </script>
+</body>
+</html>
