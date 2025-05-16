@@ -1,88 +1,123 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MY MUSIC ENJOY</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Babi Panggang Pak Oskar :)</title>
   <style>
     body {
-      font-family: 'Segoe UI', sans-serif;
-      background-color: #2f0bd0;
       margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #fff8f0;
+      color: #3b1f0e;
+    }
+
+    header {
+      background-color: #8b0000;
+      color: white;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    nav {
+      background-color: #f8e0d0;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    nav ul {
+      list-style-type: none;
       padding: 0;
     }
-    header {
-      font-family: 'Orbitron', sans-serif;
-      text-align: center;
-      padding: 20px;
+
+    nav ul li {
+      display: inline;
+      margin: 0 15px;
     }
-    .header {
-      text-align: center;
+
+    nav a {
+      text-decoration: none;
+      color: #8b0000;
+      font-weight: bold;
+    }
+
+    section {
+      padding: 2rem;
+      max-width: 800px;
+      margin: auto;
+    }
+
+    h2 {
+      color: #8b0000;
+      border-bottom: 2px solid #d4a373;
+      padding-bottom: 0.5rem;
+    }
+
+    ul {
+      padding-left: 1.5rem;
+    }
+
+    footer {
+      background-color: #8b0000;
       color: white;
-      background-color: #3a11f1;
-      
-    }
-    .glow-text {
-      color: #00ffcc;
-      text-shadow: 
-        0 0 5px #00ffcc,
-        0 0 10px #00ffcc,
-        0 0 20px #00ffcc;
-      font-size: 20px;
-      font-family: 'Orbitron', sans-serif;
-    }
-    .intro {
-      font-family: monospace;
       text-align: center;
-      color: white;
+      padding: 1rem;
+      position: fixed;
+      width: 100%;
+      bottom: 0;
     }
-    .buttoncyber {
-      background-color: black;
-      color: #00ffff;
-      border: 2px solid #00ffff;
-      padding: 15px 30px;
-      font-size: 20px;
-      cursor: pointer;
-      border-radius: 8px;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      box-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff inset;
-      transition: all 0.3s ease-in-out;
-    }
-    .buttoncyber:hover {
-      background-color: #00ffff;
-      color: black;
-      box-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff inset;
-    }
-    .button {
-      text-align: center;
-      margin-top: 40px;
-    }
-    .aboutme {
-      text-align: center;
-      color: red;
+
+    @media (max-width: 600px) {
+      nav ul li {
+        display: block;
+        margin: 10px 0;
+      }
+
+      footer {
+        position: static;
+      }
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Welcome to my Website, Small and Fragile website</h1>
+    <h1>Babi Panggang Pak Oskar :)</h1>
+    <p>Authentic Batak-Style Grilled Pork</p>
   </header>
-  <div class="intro">
-    <p>You can search, play, and download my music from here</p>
-  </div>
-  <div class="header">
-    <h6 class="glow-text">My Music is a giant and growing database of music</h6>
-  </div>
-  <div class="button">
-    <a href="music.html">
-      <button class="buttoncyber">Click Me to start our journey together</button>
-    </a>
-  </div>
-  <div class="aboutme">
-   <h1>About Me</h1>
-    <p>Hi, I'm Oskar. I'm an expert in Improvised Weaponry and learning Cyber Security. I'm also an MMA fighter with a focus on wrestling and submissions. My faith as an Orthodox Christian shapes how I approach life. In my free time, I enjoy reading manga and constantly learning new things.</p>
-  </div>
+
+  <nav>
+    <ul>
+      <li><a href="#about">About</a></li>
+      <li><a href="#menu">Menu</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul>
+  </nav>
+
+  <section id="about">
+    <h2>About Our Babi Panggang</h2>
+    <p>Babi Panggang is a traditional Batak dish featuring marinated, grilled pork with crispy skin and rich spices. Served with sambal and love.</p>
+  </section>
+
+  <section id="menu">
+    <h2>Our Menu</h2>
+    <ul>
+      <li><strong>Babi Panggang Komplit</strong> - Rp120.000</li>
+      <li><strong>Babi Goreng</strong> - Rp80.000</li>
+      <li><strong>Andaliman Sauce</strong> - Rp20.000</li>
+      <li><strong>Rice + Sayur Urap</strong> - Rp35.000</li>
+    </ul>
+  </section>
+
+  <section id="contact">
+    <h2>Contact Us</h2>
+    <p>Coder Whatsapp (Oskar): <strong>+62 858-3004-5718</strong></p>
+    <p>Cooker Whatsapp (Keren):<strong>+62-909-8970-5768</strong></p>
+    <p>Manager Whatsapp (Astuti):<strong>+62 234-7868-3402 </strong></p>
+    <p>Address: <strong>Jalan Makanan Enak No.88, Medan, Indonesia</strong></p>
+  </section>
+
+  <footer>
+    <p>&copy; This Website Belongs to Oskar, Keren, Astuti</p>
+  </footer>
 </body>
 </html>
