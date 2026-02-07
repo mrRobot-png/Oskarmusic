@@ -3,769 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CENTRAL INTELLIGENCE | CASE ARCHIVE v3.0</title>
+    <title>DompetHarian</title>
     <style>
-        :root {
-            --bg-color: #0a0a0a;
-            --panel-bg: #111111;
-            --accent-green: #00ff41;
-            --accent-red: #ff003c;
-            --accent-blue: #0066ff;
-            --folder-gold: #d4af37;
-            --text-primary: #e0e0e0;
-            --text-secondary: #888888;
-            --border-color: #333333;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-primary);
-            font-family: 'Consolas', 'Monaco', monospace;
-            line-height: 1.6;
-            padding: 20px;
-            background-image: 
-                linear-gradient(rgba(0, 255, 65, 0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 255, 65, 0.02) 1px, transparent 1px);
-            background-size: 50px 50px;
-        }
-
-        /* Top Header */
-        .system-header {
-            border-bottom: 2px solid var(--accent-green);
-            padding-bottom: 15px;
-            margin-bottom: 30px;
-            position: relative;
-        }
-
-        .system-header h1 {
-            color: var(--accent-green);
-            font-size: 2.2rem;
-            letter-spacing: 3px;
-            text-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
-            margin-bottom: 5px;
-        }
-
-        .system-status {
-            display: inline-block;
-            background: var(--accent-red);
-            color: white;
-            padding: 3px 10px;
-            font-size: 0.8rem;
-            border-radius: 3px;
-            margin-top: 5px;
-        }
-
-        /* Main Container */
-        .dashboard-container {
-            display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 25px;
-            min-height: 80vh;
-        }
-
-        /* Sidebar Navigation */
-        .nav-sidebar {
-            background: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 5px;
-            padding: 20px;
-        }
-
-        .nav-sidebar h3 {
-            color: var(--folder-gold);
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
-
-        .nav-item {
-            padding: 12px 15px;
-            margin: 8px 0;
-            background: #1a1a1a;
-            border-left: 4px solid var(--accent-blue);
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .nav-item:hover {
-            background: #222222;
-            border-left: 4px solid var(--accent-green);
-            transform: translateX(5px);
-        }
-
-        .nav-item.active {
-            background: #1a2a1a;
-            border-left: 4px solid var(--accent-green);
-        }
-
-        /* Main Content Area */
-        .main-content {
-            background: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 5px;
-            padding: 25px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* Case Folder Styling */
-        .case-folder {
-            background: linear-gradient(145deg, #151515, #1a1a1a);
-            border: 1px solid var(--border-color);
-            border-left: 6px solid var(--folder-gold);
-            margin-bottom: 20px;
-            overflow: hidden;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        }
-
-        .case-folder.active {
-            border-left: 6px solid var(--accent-green);
-            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
-        }
-
-        .folder-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 18px 25px;
-            background: rgba(0, 0, 0, 0.3);
-        }
-
-        .folder-title {
-            color: var(--folder-gold);
-            font-size: 1.3rem;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .folder-icon {
-            font-size: 1.8rem;
-            transition: transform 0.3s ease;
-        }
-
-        .case-folder.active .folder-icon {
-            transform: rotate(90deg);
-        }
-
-        .risk-indicator {
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: bold;
-        }
-
-        .risk-high {
-            background: var(--accent-red);
-            color: white;
-        }
-
-        .risk-medium {
-            background: orange;
-            color: black;
-        }
-
-        .risk-low {
-            background: var(--accent-green);
-            color: black;
-        }
-
-        /* Case Content */
-        .case-content {
-            padding: 25px;
-            display: none;
-            animation: slideDown 0.4s ease;
-        }
-
-        .case-folder.active .case-content {
-            display: block;
-        }
-
-        /* Intelligence Grid */
-        .intel-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .intel-section {
-            background: #151515;
-            border: 1px solid var(--border-color);
-            border-radius: 5px;
-            padding: 20px;
-        }
-
-        .intel-section h4 {
-            color: var(--accent-blue);
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .intel-section h4:before {
-            content: "▸";
-            color: var(--accent-green);
-        }
-
-        /* Image Gallery */
-        .image-gallery {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-
-        .intel-image {
-            border: 2px solid var(--border-color);
-            border-radius: 5px;
-            overflow: hidden;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            position: relative;
-        }
-
-        .intel-image:hover {
-            border-color: var(--accent-green);
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0, 255, 65, 0.2);
-        }
-
-        .intel-image img {
-            width: 100%;
-            height: 150px;
-            object-fit: cover;
-            display: block;
-        }
-
-        .image-caption {
-            padding: 8px;
-            background: rgba(0, 0, 0, 0.8);
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-
-        /* Data Tables */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-
-        .data-table td {
-            padding: 12px 15px;
-            border: 1px solid var(--border-color);
-            vertical-align: top;
-        }
-
-        .data-label {
-            background: #0a0a0a;
-            color: var(--text-secondary);
-            width: 30%;
-            font-weight: bold;
-            border-right: 2px solid var(--border-color);
-        }
-
-        .data-value {
-            color: var(--text-primary);
-        }
-
-        .highlight {
-            color: var(--accent-green);
-            font-weight: bold;
-        }
-
-        .social-link {
-            color: var(--accent-blue);
-            text-decoration: none;
-            margin-right: 10px;
-            display: inline-block;
-            padding: 3px 8px;
-            background: rgba(0, 102, 255, 0.1);
-            border-radius: 3px;
-            transition: all 0.3s ease;
-        }
-
-        .social-link:hover {
-            background: rgba(0, 102, 255, 0.3);
-            text-decoration: underline;
-        }
-
-        /* Search Bar */
-        .search-container {
-            position: relative;
-            margin-bottom: 25px;
-        }
-
-        #searchBar {
-            width: 100%;
-            padding: 15px 20px;
-            background: #151515;
-            border: 1px solid var(--border-color);
-            color: var(--accent-green);
-            font-family: 'Consolas', monospace;
-            font-size: 1rem;
-            outline: none;
-            border-radius: 5px;
-            transition: all 0.3s ease;
-        }
-
-        #searchBar:focus {
-            border-color: var(--accent-green);
-            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
-        }
-
-        /* Animations */
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        /* Responsive */
-        @media (max-width: 1024px) {
-            .dashboard-container {
-                grid-template-columns: 1fr;
-            }
-            
-            .intel-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Footer */
-        .system-footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid var(--border-color);
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            text-align: center;
-        }
-
-        /* Modal for images */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .modal-content {
-            max-width: 90%;
-            max-height: 90%;
-            position: relative;
-        }
-
-        .modal-content img {
-            width: 100%;
-            height: auto;
-            border: 2px solid var(--accent-green);
-            border-radius: 5px;
-        }
-
-        .close-modal {
-            position: absolute;
-            top: 20px;
-            right: 30px;
-            color: white;
-            font-size: 2rem;
-            cursor: pointer;
-            z-index: 1001;
-        }
-
-        .close-modal:hover {
-            color: var(--accent-red);
-        }
-
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; color: #333; }
+        .card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        h2 { margin: 0; color: #2c3e50; }
+        .balance { font-size: 1.5rem; font-weight: bold; color: #27ae60; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        .btn-group { display: flex; gap: 10px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 5px; color: white; cursor: pointer; font-weight: bold; }
+        .btn-inc { background: #27ae60; }
+        .btn-exp { background: #e74c3c; }
+        .btn-target { background: #3498db; }
+        ul { list-style: none; padding: 0; }
+        li { background: white; padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+        .date-header { font-size: 0.9rem; color: #7f8c8d; }
     </style>
 </head>
 <body>
-    <div class="system-header">
-        <h1>INTELLIGENCE ARCHIVE v3.0</h1>
-        <div class="system-status">ACTIVE SURVEILLANCE</div>
-        <div style="margin-top: 10px; color: var(--text-secondary); font-size: 0.9rem;">
-            LAST UPDATE: 2024-01-15 03:47 UTC | CASES: 2 | THREAT LEVEL: ELEVATED
+
+    <div class="card">
+        <div class="date-header" id="currentDate"></div>
+        <h2>Balance: <span id="balanceText">Rp 0</span></h2>
+        <div id="dailyLimitText" style="color: #e67e22; font-size: 0.9rem; margin-top: 5px;"></div>
+    </div>
+
+    <div class="card">
+        <input type="number" id="amount" placeholder="Amount (Rp)">
+        <input type="text" id="note" placeholder="What is this for?">
+        <div class="btn-group">
+            <button class="btn-inc" onclick="addTransaction('Income')">ADD +</button>
+            <button class="btn-exp" onclick="addTransaction('Expense')">SUB -</button>
         </div>
     </div>
 
-    <div class="search-container">
-        <input type="text" id="searchBar" placeholder="ENTER SEARCH PARAMETERS (NAME, PHONE, ID, LOCATION...)" 
-               onkeyup="searchCases()" autocomplete="off">
+    <div class="card">
+        <h3>Budget Target</h3>
+        <input type="number" id="targetTotal" placeholder="Target Total Money (e.g. 300000)">
+        <input type="number" id="targetDays" placeholder="Survival Days (e.g. 30)">
+        <button class="btn-target" onclick="setTarget()">Calculate Daily Limit</button>
     </div>
 
-    <div class="dashboard-container">
-        <div class="nav-sidebar">
-            <h3>OPERATIONS</h3>
-            <div class="nav-item active" onclick="filterCases('all')">
-                📊 ALL CASES
-            </div>
-            <div class="nav-item" onclick="filterCases('high-risk')">
-                ⚠️ HIGH RISK
-            </div>
-            <div class="nav-item" onclick="filterCases('school')">
-                🏫 ACADEMIC TARGETS
-            </div>
-            <div class="nav-item" onclick="filterCases('social')">
-                🌐 SOCIAL ENGINEERING
-            </div>
-            
-            <h3 style="margin-top: 30px;">ANALYTICS</h3>
-            <div style="background: #1a1a1a; padding: 15px; border-radius: 5px; margin-top: 10px;">
-                <div style="color: var(--accent-green); font-size: 0.9rem;">DATA COMPLETION</div>
-                <div style="background: #333; height: 5px; margin: 10px 0; border-radius: 3px;">
-                    <div style="background: var(--accent-green); width: 85%; height: 100%; border-radius: 3px;"></div>
-                </div>
-                <div style="font-size: 0.8rem; color: var(--text-secondary);">
-                    2 TARGETS PROFILED<br>
-                    15+ TOOLS DEPLOYED<br>
-                    SECURITY STATUS: COMPROMISED
-                </div>
-            </div>
-        </div>
-
-        <div class="main-content" id="mainContent">
-            <!-- Case 1: ERICA -->
-            <div class="case-folder active" data-category="school social high-risk" id="case-erica">
-                <div class="folder-header" onclick="toggleFolder('erica')">
-                    <div class="folder-title">
-                        <span class="folder-icon">▶</span>
-                        CASE_ERICA_D_FAIRY [PRIMARY TARGET]
-                    </div>
-                    <div class="risk-indicator risk-high">HIGH VALUE TARGET</div>
-                </div>
-                
-                <div class="case-content">
-                    <div class="intel-grid">
-                        <!-- Personal Information -->
-                        <div class="intel-section">
-                            <h4>PERSONAL IDENTIFICATION</h4>
-                            <table class="data-table">
-                                <tr><td class="data-label">FULL NAME</td><td class="data-value">AI ERICA D.FAIRY BR SEMBIRING</td></tr>
-                                <tr><td class="data-label">PHONE NUMBER</td><td class="data-value highlight">+62 859-3439-2250</td></tr>
-                                <tr><td class="data-label">NISN / DOB</td><td class="data-value">0081920662 / 12.08.2008</td></tr>
-                                <tr><td class="data-label">AGE</td><td class="data-value">16 YEARS (AS OF 2024)</td></tr>
-                            </table>
-                        </div>
-
-                        <!-- Institution -->
-                        <div class="intel-section">
-                            <h4>INSTITUTIONAL AFFILIATION</h4>
-                            <table class="data-table">
-                                <tr><td class="data-label">SCHOOL</td><td class="data-value">SMA SWASTA ADVENT BILINGUAL (SMAXBILL)</td></tr>
-                                <tr><td class="data-label">POSITION</td><td class="data-value highlight">OSIS: UPACARA & UPB DEPARTMENT</td></tr>
-                                <tr><td class="data-label">LOCATION</td><td class="data-value">MEDAN, NORTH SUMATRA, INDONESIA</td></tr>
-                                <tr><td class="data-label">STATUS</td><td class="data-value">ACTIVE STUDENT</td></tr>
-                            </table>
-                        </div>
-
-                        <!-- Digital Footprint -->
-                        <div class="intel-section">
-                            <h4>DIGITAL FOOTPRINT</h4>
-                            <table class="data-table">
-                                <tr>
-                                    <td class="data-label">SOCIAL MEDIA</td>
-                                    <td class="data-value">
-                                        <a href="https://www.tiktok.com/@ricknotfound.exe" target="_blank" class="social-link">TIKTOK</a>
-                                        <a href="https://www.instagram.com/talkabouterr_" target="_blank" class="social-link">INSTAGRAM</a>
-                                        <a href="https://www.facebook.com/profile.php?id=100090021373400" target="_blank" class="social-link">FACEBOOK</a>
-                                    </td>
-                                </tr>
-                                <tr><td class="data-label">PLATFORMS</td><td class="data-value">ACTIVE ON ALL MAJOR SOCIAL NETWORKS</td></tr>
-                                <tr><td class="data-label">POSTING FREQ</td><td class="data-value">DAILY ACTIVITY DETECTED</td></tr>
-                            </table>
-                        </div>
-
-                        <!-- Image Intelligence -->
-                        <div class="intel-section">
-                            <h4>VISUAL INTELLIGENCE</h4>
-                            <div class="image-gallery">
-                                <div class="intel-image" onclick="openModal('school_img')">
-                                    <img src="https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=400&h=300&fit=crop" alt="School Building">
-                                    <div class="image-caption">SMAXBILL CAMPUS</div>
-                                </div>
-                                <div class="intel-image" onclick="openModal('osis_img')">
-                                    <img src="https://images.unsplash.com/photo-1542744095-fcf48d80b0fd?w=400&h=300&fit=crop" alt="OSIS Activity">
-                                    <div class="image-caption">OSIS ACTIVITIES</div>
-                                </div>
-                                <div class="intel-image" onclick="openModal('medan_img')">
-                                    <img src="https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?w=400&h=300&fit=crop" alt="Medan City">
-                                    <div class="image-caption">MEDAN CITY</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Vulnerability Assessment -->
-                        <div class="intel-section">
-                            <h4>VULNERABILITY ASSESSMENT</h4>
-                            <table class="data-table">
-                                <tr><td class="data-label">SECURITY LEVEL</td><td class="data-value highlight">LOW TO MEDIUM</td></tr>
-                                <tr><td class="data-label">EXPOSURE</td><td class="data-value">HIGH PUBLIC PRESENCE</td></tr>
-                                <tr><td class="data-label">WEAKNESS</td><td class="data-value">SOCIAL MEDIA OVERSHARE</td></tr>
-                                <tr><td class="data-label">PROTECTION</td><td class="data-value">BASIC PRIVACY SETTINGS</td></tr>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Case 2: EIRENE -->
-            <div class="case-folder" data-category="school social" id="case-eirene">
-                <div class="folder-header" onclick="toggleFolder('eirene')">
-                    <div class="folder-title">
-                        <span class="folder-icon">▶</span>
-                        CASE_EIRENE_GINTING [SECONDARY TARGET]
-                    </div>
-                    <div class="risk-indicator risk-medium">MEDIUM VALUE TARGET</div>
-                </div>
-                
-                <div class="case-content">
-                    <div class="intel-grid">
-                        <!-- Primary Information -->
-                        <div class="intel-section">
-                            <h4>BASIC IDENTIFICATION</h4>
-                            <table class="data-table">
-                                <tr><td class="data-label">FULL NAME</td><td class="data-value">EIRENE EISTER GINTING</td></tr>
-                                <tr><td class="data-label">ALTERNATE NAME</td><td class="data-value">EIRENE ESTER GINTING (FB)</td></tr>
-                                <tr><td class="data-label">PHONE NUMBER</td><td class="data-value highlight">+62 812-6491-1947</td></tr>
-                            </table>
-                        </div>
-
-                        <!-- Academic Profile -->
-                        <div class="intel-section">
-                            <h4>ACADEMIC PROFILE</h4>
-                            <table class="data-table">
-                                <tr><td class="data-label">SCHOOL</td><td class="data-value">SMK NEGERI 9 MEDAN</td></tr>
-                                <tr><td class="data-label">CLASS</td><td class="data-value highlight">XII ANIMASI 2</td></tr>
-                                <tr><td class="data-label">INSTAGRAM</td><td class="data-value">@xiianimasi2_ (CLASS ACCOUNT)</td></tr>
-                                <tr><td class="data-label">SCHOOL IG</td><td class="data-value">@smkn9medan</td></tr>
-                            </table>
-                        </div>
-
-                        <!-- Digital Presence -->
-                        <div class="intel-section">
-                            <h4>DIGITAL PRESENCE ANALYSIS</h4>
-                            <table class="data-table">
-                                <tr>
-                                    <td class="data-label">PRIMARY ACCOUNT</td>
-                                    <td class="data-value">
-                                        <a href="https://www.instagram.com/eireneoke" target="_blank" class="social-link">INSTAGRAM</a>
-                                        <span class="highlight">(GOLD MINE)</span>
-                                    </td>
-                                </tr>
-                                <tr><td class="data-label">TELEGRAM</td><td class="data-value">ACTIVE</td></tr>
-                                <tr><td class="data-label">TWITTER</td><td class="data-value">ABANDONED</td></tr>
-                                <tr><td class="data-label">FACEBOOK</td><td class="data-value">POSSIBLY ABANDONED</td></tr>
-                                <tr><td class="data-label">TIKTOK</td><td class="data-value">MANAGED BY 2ND ACCOUNT</td></tr>
-                                <tr><td class="data-label">DEVIANT ART</td><td class="data-value">UNCERTAIN EXISTENCE</td></tr>
-                            </table>
-                        </div>
-
-                        <!-- Attack History -->
-                        <div class="intel-section">
-                            <h4>ATTEMPTED PENETRATION</h4>
-                            <table class="data-table">
-                                <tr><td class="data-label">PHONE HACK</td><td class="data-value">DISMISSED</td></tr>
-                                <tr><td class="data-label">PHISHING</td><td class="data-value">DISMISSED</td></tr>
-                                <tr><td class="data-label">NETWORK HACK</td><td class="data-value">PHYSICALLY IMPOSSIBLE</td></tr>
-                                <tr><td class="data-label">FAMILY ACCOUNTS</td><td class="data-value">NOT ATTEMPTED (KNOWN DATA)</td></tr>
-                            </table>
-                        </div>
-
-                        <!-- Tools Used -->
-                        <div class="intel-section">
-                            <h4>TOOLS DEPLOYED</h4>
-                            <table class="data-table">
-                                <tr><td class="data-label">COUNT</td><td class="data-value highlight">15+ TOOLS</td></tr>
-                                <tr><td class="data-label">PRIMARY</td><td class="data-value">TERMUX, THE HARVESTER, SHERLOCK</td></tr>
-                                <tr><td class="data-label">METHOD</td><td class="data-value">OSINT + SOCIAL ENGINEERING</td></tr>
-                                <tr><td class="data-label">SUCCESS RATE</td><td class="data-value">LIMITED DATA RECOVERY</td></tr>
-                            </table>
-                        </div>
-
-                        <!-- Security Assessment -->
-                        <div class="intel-section">
-                            <h4>SECURITY ASSESSMENT</h4>
-                            <table class="data-table">
-                                <tr><td class="data-label">LEVEL</td><td class="data-value highlight">LOW</td></tr>
-                                <tr><td class="data-label">GMAIL STATUS</td><td class="data-value">SAFE FROM BREACHES</td></tr>
-                                <tr><td class="data-label">DATA AVAILABILITY</td><td class="data-value">LIMITED PUBLIC DATA</td></tr>
-                                <tr><td class="data-label">PARENTAL DATA</td><td class="data-value">INTENTIONALLY UNTARGETED</td></tr>
-                            </table>
-                        </div>
-
-                        <!-- Image Intelligence -->
-                        <div class="intel-section">
-                            <h4>VISUAL INTELLIGENCE</h4>
-                            <div class="image-gallery">
-                                <div class="intel-image" onclick="openModal('smk9_img')">
-                                    <img src="https://images.unsplash.com/photo-1562774053-701939374585?w=400&h=300&fit=crop" alt="SMK Building">
-                                    <div class="image-caption">SMKN 9 MEDAN</div>
-                                </div>
-                                <div class="intel-image" onclick="openModal('animation_img')">
-                                    <img src="https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&h=300&fit=crop" alt="Animation Studio">
-                                    <div class="image-caption">ANIMATION STUDIO</div>
-                                </div>
-                                <div class="intel-image" onclick="openModal('art_img')">
-                                    <img src="https://images.unsplash.com/photo-1545235617-9465d2a55698?w=400&h=300&fit=crop" alt="Digital Art">
-                                    <div class="image-caption">DIGITAL ART (ANIMASI 2)</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Image Modal -->
-    <div class="modal" id="imageModal" onclick="closeModal()">
-        <span class="close-modal" onclick="closeModal()">&times;</span>
-        <div class="modal-content">
-            <img id="modalImage" src="" alt="Intelligence Image">
-        </div>
-    </div>
-
-    <div class="system-footer">
-        <div style="color: var(--text-secondary); font-size: 0.8rem;">
-            SYSTEM: INTELLIGENCE ARCHIVE v3.0 | ENCRYPTION: AES-256 | ACCESS: AUTHORIZED PERSONNEL ONLY
-            <br>
-            WARNING: UNAUTHORIZED ACCESS IS PROHIBITED AND MONITORED
-        </div>
-    </div>
+    <h3>History Log</h3>
+    <ul id="historyList"></ul>
 
     <script>
-        // Toggle folder visibility
-        function toggleFolder(target) {
-            const folder = target === 'erica' ? 
-                document.getElementById('case-erica') : 
-                document.getElementById('case-eirene');
+        let balance = parseFloat(localStorage.getItem('balance')) || 0;
+        let history = JSON.parse(localStorage.getItem('history')) || [];
+        let dailyLimit = localStorage.getItem('dailyLimit') || 0;
+
+        function updateUI() {
+            document.getElementById('balanceText').innerText = `Rp ${balance.toLocaleString('id-ID')}`;
+            document.getElementById('currentDate').innerText = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            document.getElementById('dailyLimitText').innerText = dailyLimit > 0 ? `Max Daily Spending: Rp ${parseFloat(dailyLimit).toLocaleString('id-ID')}` : "";
             
-            const isActive = folder.classList.contains('active');
-            
-            // Close all folders first
-            document.querySelectorAll('.case-folder').forEach(f => {
-                f.classList.remove('active');
-                f.querySelector('.folder-icon').textContent = '▶';
-            });
-            
-            // Open selected folder if it wasn't active
-            if (!isActive) {
-                folder.classList.add('active');
-                folder.querySelector('.folder-icon').textContent = '▼';
-                
-                // Scroll to folder
-                folder.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            const list = document.getElementById('historyList');
+            list.innerHTML = history.map(item => `
+                <li>
+                    <span><strong>${item.type}:</strong> ${item.note}</span>
+                    <span style="color: ${item.type === 'Income' ? 'green' : 'red'}">
+                        ${item.type === 'Income' ? '+' : '-'} Rp ${item.amount.toLocaleString('id-ID')}
+                    </span>
+                </li>
+            `).reverse().join('');
+        }
+
+        function addTransaction(type) {
+            const amount = parseFloat(document.getElementById('amount').value);
+            const note = document.getElementById('note').value || "No note";
+            if (isNaN(amount)) return alert("Enter a valid amount");
+
+            if (type === 'Income') balance += amount;
+            else balance -= amount;
+
+            history.push({ type, amount, note, date: new Date().toISOString() });
+            save();
+            document.getElementById('amount').value = '';
+            document.getElementById('note').value = '';
+            updateUI();
+        }
+
+        function setTarget() {
+            const total = parseFloat(document.getElementById('targetTotal').value);
+            const days = parseFloat(document.getElementById('targetDays').value);
+            if (total > 0 && days > 0) {
+                dailyLimit = (total / days).toFixed(0);
+                save();
+                updateUI();
             }
         }
 
-        // Search functionality
-        function searchCases() {
-            const searchTerm = document.getElementById('searchBar').value.toLowerCase();
-            const folders = document.querySelectorAll('.case-folder');
-            
-            folders.forEach(folder => {
-                const text = folder.textContent.toLowerCase();
-                if (text.includes(searchTerm) || searchTerm === '') {
-                    folder.style.display = 'block';
-                } else {
-                    folder.style.display = 'none';
-                }
-            });
+        function save() {
+            localStorage.setItem('balance', balance);
+            localStorage.setItem('history', JSON.stringify(history));
+            localStorage.setItem('dailyLimit', dailyLimit);
         }
 
-        // Filter by category
-        function filterCases(category) {
-            const navItems = document.querySelectorAll('.nav-item');
-            navItems.forEach(item => item.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-            
-            const folders = document.querySelectorAll('.case-folder');
-            
-            folders.forEach(folder => {
-                if (category === 'all') {
-                    folder.style.display = 'block';
-                } else {
-                    const categories = folder.getAttribute('data-category');
-                    if (categories && categories.includes(category)) {
-                        folder.style.display = 'block';
-                    } else {
-                        folder.style.display = 'none';
-                    }
-                }
-            });
-        }
-
-        // Image modal functionality
-        function openModal(imageType) {
-            const modal = document.getElementById('imageModal');
-            const modalImg = document.getElementById('modalImage');
-            
-            // Map image types to URLs (in real use, replace with actual image URLs)
-            const imageMap = {
-                'school_img': 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800&fit=crop',
-                'osis_img': 'https://images.unsplash.com/photo-1542744095-fcf48d80b0fd?w=800&fit=crop',
-                'medan_img': 'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?w-800&fit=crop',
-                'smk9_img': 'https://images.unsplash.com/photo-1562774053-701939374585?w=800&fit=crop',
-                'animation_img': 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=800&fit=crop',
-                'art_img': 'https://images.unsplash.com/photo-1545235617-9465d2a55698?w=800&fit=crop'
-            };
-            
-            modalImg.src = imageMap[imageType] || 'https://images.unsplash.com/photo-1555949963-aa79dcee981c?w=800&fit=crop';
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeModal() {
-            document.getElementById('imageModal').style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
-            if (e.key === '/' && e.target.tagName !== 'INPUT') {
-                e.preventDefault();
-                document.getElementById('searchBar').focus();
-            }
-        });
-
-        // Initialize with first case open
-        document.addEventListener('DOMContentLoaded', () => {
-            // Auto-scroll to search bar after a moment
-            setTimeout(() => {
-                document.getElementById('searchBar').focus();
-            }, 500);
-        });
+        updateUI();
     </script>
 </body>
 </html>
