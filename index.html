@@ -501,4 +501,183 @@
             amount: parsed,
             note: 'Admin overwrite',
             timestamp: new Date().toISOString(),
-            
+            dateKey: nowKey(),
+            fullDate: displayDateTime()
+        };
+        lastUndo = null;
+        balance = parsed;
+        history.push(before);
+        persistAll();
+        balanceInput.value = '';
+        updateUI();
+        alert('Balance overwritten & snapshot recorded');
+    }
+
+    function clearAllData() {
+        if (!confirm('Clear everything (balance, logs)?')) return;
+        localStorage.removeItem(LS_BALANCE);
+        localStorage.removeItem(LS_HISTORY);
+        localStorage.removeItem(LS_TARGET_DAYS);
+        localStorage.removeItem(LS_LAST_UNDO);
+        balance = 0;
+        history = [];
+        lastUndo = null;
+        updateUI();
+        alert('All data cleared');
+    }
+
+    // Persist
+    function persistAll() {
+        saveNumber(LS_BALANCE, balance);
+        saveJSON(LS_HISTORY, history);
+        saveJSON(LS_LAST_UNDO, lastUndo);
+    }
+
+    // UI update, calculations
+    function updateUI() {
+        balanceText.innerText = `Rp ${formatRupiah(balance)}`;
+        entryCount.innerText = history.length;
+        lastChange.innerText = history.length ? history[history.length-1].fullDate + ' • ' + (history[history.length-1].note||'') : '—';
+        canUndoEl.innerText = loadJSON(LS_LAST_UNDO, null) ? 'Yes' : 'No';
+
+        // Target logic
+        const days = Number(targetDaysInput.value) || loadNumber(LS_TARGET_DAYS, 0);
+        if (days > 0 && balance > 0) {
+            targetDisplay.style.display = 'block';
+            let divisor = days;
+            if (targetMode.value === 'monthly') divisor = days * 30;
+            const dailyLimit = Math.max(1, Math.floor(balance / divisor));
+            dailyLimitEl.innerText = `Rp ${formatRupiah(dailyLimit)}`;
+
+            // spent today
+            const todayKey = nowKey();
+            const spentToday = history.filter(h => h.dateKey === todayKey && h.type === 'Expense').reduce((s,h)=>s+h.amount, 0);
+            spentTodayEl.innerText = `Rp ${formatRupiah(spentToday)}`;
+            remainingTodayEl.innerText = `Rp ${formatRupiah(Math.max(0, dailyLimit - spentToday))}`;
+
+            let percent = (spentToday / dailyLimit) * 100;
+            pBar.style.width = Math.min(percent, 100) + '%';
+            if (percent > 100) { pBar.style.background = 'var(--red)'; warningText.innerText = 'OVER LIMIT!'; warningText.style.color = 'var(--red)'; }
+            else if (percent > 80) { pBar.style.background = 'var(--yellow)'; warningText.innerText = 'ALMOST FULL'; warningText.style.color = 'var(--yellow)'; }
+            else { pBar.style.background = 'var(--green)'; warningText.innerText = 'SAFE'; warningText.style.color = 'var(--green)'; }
+        } else {
+            targetDisplay.style.display = 'none';
+        }
+
+        renderHistory(history.slice().reverse());
+    }
+
+    function renderHistory(list) {
+        const top = list.slice(0, 200); // limit for performance
+        historyList.innerHTML = top.map(h => {
+            const sign = h.type === 'Expense' ? '-' : (h.type === 'Income' ? '+' : '');
+            const color = h.type === 'Expense' ? 'color:var(--red)' : (h.type === 'Income' ? 'color:var(--green)' : 'color:var(--accent)');
+            return `<li>
+                        <div>
+                            <strong>${h.type}</strong><br>
+                            <div class="note">${h.fullDate} • ${h.note || ''}</div>
+                        </div>
+                        <div style="${color}; text-align:right; min-width:90px">
+                            ${sign} Rp ${formatRupiah(h.amount)}
+                            <div style="margin-top:6px"><button class="small-btn" onclick="deleteLog(${h.id})">Delete</button></div>
+                        </div>
+                    </li>`;
+        }).join('');
+    }
+
+    // Delete log (global function used in markup)
+    window.deleteLog = function(id) {
+        if (!confirm('Delete this log entry? This will adjust nothing automatically. Use Undo to revert recent adds.')) return;
+        const idx = history.findIndex(h=>h.id===id);
+        if (idx > -1) {
+            history.splice(idx,1);
+            persistAll();
+            updateUI();
+        }
+    };
+
+    // Target change persists
+    function onTargetChange() {
+        saveNumber(LS_TARGET_DAYS, Number(targetDaysInput.value) || 0);
+        updateUI();
+    }
+
+    // Admin: format admin input also
+    function onAmountInput(e){ // override earlier declared to prevent duplicate
+        const raw = e.target.value;
+        // preserve minus if user types - for convenience (not necessary here)
+        const numeric = raw.replace(/[^\d]/g,'');
+        if (!numeric) e.target.value = '';
+        else e.target.value = formatRupiah(Number(numeric));
+    }
+
+    function setBalanceFromAdmin_old(){}
+    // Local helper: prompt for confirmation on unload if unsaved? not necessary
+
+    // Utility to parse admin field & update display
+    function setBalanceFromAdmin_legacy(){}
+
+    // Utilities for import/export already defined above
+
+    // small safety: autosave interval
+    setInterval(() => { persistAll(); }, 15000);
+
+    // initial persist & render
+    persistAll();
+    updateUI();
+
+    // Keyboard shortcut: Ctrl+Z -> undo
+    window.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            undoLast();
+        }
+    });
+
+    // Simple notification (if spending over limit, alert once per session)
+    (function spendingWatcher(){
+        const alertedKey = 'dwp_alerted_over';
+        const alerted = sessionStorage.getItem(alertedKey);
+        const days = Number(targetDaysInput.value) || loadNumber(LS_TARGET_DAYS, 0);
+        if (!alerted && days > 0 && balance > 0) {
+            const divisor = (targetMode.value === 'monthly') ? days*30 : days;
+            const dailyLimit = Math.max(1, Math.floor(balance/divisor));
+            const spentToday = history.filter(h => h.dateKey === nowKey() && h.type === 'Expense').reduce((s,h)=>s+h.amount,0);
+            if (spentToday > dailyLimit) {
+                alert('You are over today\'s limit.');
+                sessionStorage.setItem(alertedKey, '1');
+            }
+        }
+    })();
+
+    // helper to download JSON used elsewhere
+    function downloadJSON(data, name) {
+        downloadFile(JSON.stringify(data, null, 2), 'application/json', name);
+    }
+
+    // handle import file button accessible function
+    window.handleImport = handleImport;
+
+    // Allow toggling admin via floating button
+    document.getElementById('floatingToggleAdmin').addEventListener('click', () => {
+        const admin = document.getElementById('adminSection');
+        admin.style.display = admin.style.display === 'block' ? 'none' : 'block';
+    });
+
+    // expose some internals for advanced usage (console)
+    window.dwp = {
+        getBalance: () => balance,
+        getHistory: () => history,
+        persistAll,
+        takeSnapshot,
+        addTransaction: (type, amount, note='') => {
+            amountInput.value = formatRupiah(amount);
+            noteInput.value = note;
+            addTransaction(type);
+        }
+    };
+
+})(); // end closure
+</script>
+</body>
+</html>
