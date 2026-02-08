@@ -1,260 +1,504 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Daily Wallet Pro</title>
-
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Daily Wallet Pro — Smarter</title>
 <style>
+    :root {
+        --bg: #0f1220;
+        --card: rgba(255,255,255,0.08);
+        --muted: #a0a3bd;
+        --accent: #4aa3ff;
+        --green: #2ecc71;
+        --red: #ff5c5c;
+        --yellow: #f1c40f;
+        --radius: 14px;
+        --maxw: 700px;
+    }
+    html,body{height:100%;margin:0}
     body {
-        background: #0f1220;
+        background: var(--bg);
         color: #eaeaf0;
-        font-family: system-ui, sans-serif;
-        padding: 20px;
-        max-width: 500px;
-        margin: auto;
-        /* Prevent pull-to-refresh issues on mobile */
-        overscroll-behavior-y: contain; 
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+        padding: 22px;
+        display:flex;
+        justify-content:center;
+        align-items:flex-start;
     }
-
+    .wrap {
+        width:100%;
+        max-width:var(--maxw);
+    }
     .card {
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.15);
-        border-radius: 14px;
-        padding: 16px;
-        margin-bottom: 16px;
+        background: var(--card);
+        border-radius: var(--radius);
+        padding:16px;
+        margin-bottom:14px;
+        border:1px solid rgba(255,255,255,0.12);
     }
-
-    h2, h3 { margin: 0 0 10px; color: #4aa3ff; }
-
+    h2,h3{margin:0 0 8px;color:var(--accent)}
+    .muted{color:var(--muted);font-size:0.9rem}
     .balance {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #2ecc71;
-        text-align: center;
+        font-size:2.2rem;font-weight:700;color:var(--green);
+        display:flex;justify-content:space-between;align-items:center;
     }
-
-    input {
-        width: 100%;
-        padding: 12px;
-        margin-top: 10px;
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.15);
-        border-radius: 8px;
-        color: white;
-        box-sizing: border-box;
-        /* Fixes "unclickable" issues by ensuring proper touch area */
-        font-size: 16px; 
+    .small-btn { padding:6px 10px;border-radius:10px;border:none; cursor:pointer; font-weight:600 }
+    .blue { background:var(--accent); color:white }
+    .green { background:var(--green); color:#082a12 }
+    .red { background:var(--red); color:white }
+    input[type="text"], input[type="number"], select {
+        width:100%; padding:12px; margin-top:8px; border-radius:10px;
+        background: rgba(255,255,255,0.04); color: #fff; border:1px solid rgba(255,255,255,0.12);
+        box-sizing:border-box; font-size:1rem;
     }
-
-    button {
-        padding: 12px;
-        margin-top: 10px;
-        width: 100%;
-        border: none;
-        border-radius: 10px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: opacity 0.2s;
-        touch-action: manipulation;
+    .row { display:flex; gap:10px; }
+    .row > * { flex:1; }
+    .progress-container { background: rgba(255,255,255,0.06); border-radius:10px; height:12px; overflow:hidden; margin-top:10px;}
+    .progress-bar { height:100%; width:0%; transition:width .25s, background .25s; }
+    ul { list-style:none;padding:0;margin:0; max-height:220px; overflow:auto;}
+    li { padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .note { color:var(--muted); font-size:0.85rem }
+    .floating {
+        position:fixed; right:20px; bottom:20px; z-index:9999;
+        display:flex; gap:8px; flex-direction:column;
     }
-
-    button:active { opacity: 0.7; }
-    .green { background: #2ecc71; color: white; }
-    .red { background: #ff5c5c; color: white; }
-    .blue { background: #4aa3ff; color: white; }
-    
-    .btn-delete {
-        background: #ff5c5c;
-        padding: 6px 12px;
-        font-size: 0.7rem;
-        width: auto;
-        margin: 0;
-    }
-
-    ul { list-style: none; padding: 0; }
-    li {
-        padding: 12px 0;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.9rem;
-    }
-
-    .muted { color: #a0a3bd; font-size: 0.8rem; }
-    
-    #adminSection { 
-        display: none; 
-        border-top: 2px dashed rgba(255,255,255,0.2); 
-        margin-top: 40px; 
-        padding-top: 20px; 
-    }
+    .chip { padding:8px 12px; border-radius:999px; background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); }
+    .controls { display:flex; gap:10px; margin-top:10px; }
+    .filter-row { display:flex; gap:10px; align-items:center; margin-top:8px }
+    .small { font-size:0.85rem; padding:6px 10px; border-radius:8px; }
+    .danger { background: rgba(255,0,0,0.06); border:1px solid rgba(255,0,0,0.12); color:var(--red); padding:8px;border-radius:10px }
+    .center { text-align:center }
+    .kbd { background:rgba(0,0,0,0.25); padding:2px 6px; border-radius:6px; font-size:0.8rem; }
+    @media (max-width:520px){ .row{flex-direction:column}}
 </style>
 </head>
-
 <body>
+<div class="wrap">
 
-<div class="card">
-    <div class="muted">Current Balance</div>
-    <div class="balance" id="balanceText">Rp 0</div>
-</div>
-
-<div class="card">
-    <h3>Add Transaction</h3>
-    <input type="text" id="amount" 
-           inputmode="decimal" 
-           placeholder="Amount (e.g. 20.000)" 
-           oninput="checkCommand(this.value)"
-           autocomplete="off">
-    
-    <input type="text" id="note" placeholder="Description" autocomplete="off">
-    
-    <div style="display: flex; gap: 10px;">
-        <button class="green" onclick="addTransaction('Income')">Income</button>
-        <button class="red" onclick="addTransaction('Expense')">Expense</button>
-    </div>
-</div>
-
-<div class="card">
-    <h3>History</h3>
-    <ul id="historyList"></ul>
-</div>
-
-<div id="adminSection">
-    <h3>Admin Panel <span style="font-size: 0.7rem; color: #ff5c5c;">(Unlocked)</span></h3>
     <div class="card">
-        <p class="muted">Reset initial funds (No logs):</p>
-        <input id="balanceInput" inputmode="decimal" placeholder="New Balance Value">
-        <button class="blue" onclick="setBalance()">Overwrite Balance</button>
+        <div style="display:flex; justify-content:space-between; align-items:center">
+            <div>
+                <div class="muted">Current Balance</div>
+                <div class="balance" id="balanceText">Rp 0</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;min-width:180px">
+                <button class="small-btn blue" id="snapshotBtn">Take Snapshot</button>
+                <button class="small-btn green" id="quickAddBtn">Quick + Balance</button>
+            </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+            <div class="chip muted">Last change: <span id="lastChange">—</span></div>
+            <div class="chip muted">Entries: <span id="entryCount">0</span></div>
+            <div class="chip muted">Undo: <span id="canUndo">No</span></div>
+        </div>
     </div>
-    
+
     <div class="card">
-        <p class="muted">Manage Logs</p>
-        <ul id="adminLogList"></ul>
+        <h3>Target Maker</h3>
+        <p class="muted">How many days must this money last?</p>
+        <div class="row">
+            <input type="number" id="targetDays" placeholder="e.g. 9">
+            <select id="targetMode" title="target mode">
+                <option value="days">Days (divide total)</option>
+                <option value="monthly">Months (divide total * 30)</option>
+            </select>
+        </div>
+        <div id="targetDisplay" class="target-result" style="display:none; margin-top:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-end">
+                <span class="muted">Daily Budget: <br><strong id="dailyLimit" style="color:var(--accent); font-size:1.05rem">Rp 0</strong></span>
+                <span id="warningText" class="muted" style="font-weight:700"></span>
+            </div>
+            <div class="progress-container">
+                <div id="pBar" class="progress-bar"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:8px;" class="muted">
+                <span>Spent Today: <span id="spentToday">Rp 0</span></span>
+                <span>Remaining Today: <span id="remainingToday">Rp 0</span></span>
+            </div>
+        </div>
     </div>
+
+    <div class="card" aria-labelledby="addTransactionTitle">
+        <h3 id="addTransactionTitle">Add Transaction</h3>
+        <div class="row">
+            <input type="text" id="amount" inputmode="numeric" placeholder="Amount (e.g. 20.000)" autocomplete="off" />
+            <input type="text" id="note" placeholder="Description (optional)" autocomplete="off" />
+        </div>
+        <div style="display:flex; gap:10px; margin-top:10px;">
+            <button class="green" id="btnIncome">Income</button>
+            <button class="red" id="btnExpense">Expense</button>
+            <button class="small-btn blue" id="btnUndo" title="Undo last transaction">Undo</button>
+        </div>
+
+        <div class="controls" style="margin-top:12px">
+            <button class="small-btn" id="btnExport">Export CSV</button>
+            <button class="small-btn" id="btnExportJSON">Export JSON</button>
+            <input type="file" id="importFile" style="display:none;" accept=".json" />
+            <button class="small-btn" id="btnImport">Import JSON</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Activity Log</h3>
+        <div class="filter-row">
+            <select id="filterType">
+                <option value="all">All</option>
+                <option value="Income">Income</option>
+                <option value="Expense">Expense</option>
+                <option value="Snapshot">Snapshot</option>
+            </select>
+            <input type="date" id="filterFrom" />
+            <input type="date" id="filterTo" />
+            <button class="small-btn" id="btnApplyFilter">Apply</button>
+            <button class="small-btn" id="btnClearFilter">Clear</button>
+        </div>
+        <ul id="historyList"></ul>
+    </div>
+
+    <div class="card" id="adminSection">
+        <h3>Admin Panel <span class="muted">(unlocked)</span></h3>
+        <div class="muted">Reset balance (type number with separators allowed)</div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+            <input id="balanceInput" placeholder="New Balance value"/>
+            <button class="blue" id="setBalanceBtn">Overwrite</button>
+        </div>
+        <div style="margin-top:12px; display:flex; gap:8px;">
+            <button class="small-btn red" id="clearAllBtn">Clear all data</button>
+            <button class="small-btn" id="downloadLogsBtn">Download logs (JSON)</button>
+        </div>
+    </div>
+
+</div>
+
+<div class="floating" aria-hidden="false">
+    <button id="floatingAdd" class="green small-btn">＋ Add Quick Income</button>
+    <button id="floatingToggleAdmin" class="small-btn">Toggle Admin</button>
 </div>
 
 <script>
-    let balance = Number(localStorage.getItem('balance')) || 0;
-    let history = JSON.parse(localStorage.getItem('history')) || [];
+/* ---------------------------
+   Smart Daily Wallet Pro JS
+   - Accepts 20.000 / 20,000 / 20000
+   - Activity log, snapshots, undo, export/import
+   - Persistent localStorage
+   - Auto-format input, notifications for over-limit
+---------------------------- */
 
-    function checkCommand(val) {
-        // Trim and lowercase check to be more user friendly
-        if (val.trim() === '/Admin') {
-            const adminPanel = document.getElementById('adminSection');
-            const isHidden = window.getComputedStyle(adminPanel).display === 'none';
-            
-            adminPanel.style.display = isHidden ? 'block' : 'none';
-            
-            // Clear input and remove focus to reset the keyboard state
-            const amtInput = document.getElementById('amount');
-            amtInput.value = ''; 
-            amtInput.blur(); 
-            
-            if (isHidden) {
-                // Delay alert slightly to let the UI finish updating
-                setTimeout(() => alert("Admin Panel Unlocked!"), 100);
-            }
-        }
+(() => {
+    // Keys
+    const LS_BALANCE = 'dwp_balance_v2';
+    const LS_HISTORY = 'dwp_history_v2';
+    const LS_TARGET_DAYS = 'dwp_target_days_v2';
+    const LS_LAST_UNDO = 'dwp_last_undo_v2';
+
+    // Elements
+    const balanceText = el('balanceText');
+    const lastChange = el('lastChange');
+    const entryCount = el('entryCount');
+    const canUndoEl = el('canUndo');
+    const amountInput = el('amount');
+    const noteInput = el('note');
+    const btnIncome = el('btnIncome');
+    const btnExpense = el('btnExpense');
+    const btnUndo = el('btnUndo');
+    const historyList = el('historyList');
+    const targetDaysInput = el('targetDays');
+    const targetMode = el('targetMode');
+    const targetDisplay = el('targetDisplay');
+    const dailyLimitEl = el('dailyLimit');
+    const spentTodayEl = el('spentToday');
+    const remainingTodayEl = el('remainingToday');
+    const pBar = el('pBar');
+    const warningText = el('warningText');
+    const snapshotBtn = el('snapshotBtn');
+    const quickAddBtn = el('quickAddBtn');
+    const quickFloating = el('floatingAdd');
+    const btnExport = el('btnExport');
+    const btnExportJSON = el('btnExportJSON');
+    const btnImport = el('btnImport');
+    const importFile = el('importFile');
+    const filterType = el('filterType');
+    const filterFrom = el('filterFrom');
+    const filterTo = el('filterTo');
+    const btnApplyFilter = el('btnApplyFilter');
+    const btnClearFilter = el('btnClearFilter');
+    const setBalanceBtn = el('setBalanceBtn');
+    const balanceInput = el('balanceInput');
+    const clearAllBtn = el('clearAllBtn');
+    const downloadLogsBtn = el('downloadLogsBtn');
+    const snapshotBtnEl = el('snapshotBtn');
+    const quickAddBtnEl = el('quickAddBtn');
+    const btnExportJSONEl = el('btnExportJSON');
+
+    // State
+    let balance = loadNumber(LS_BALANCE, 0);
+    let history = loadJSON(LS_HISTORY, []);
+    let lastUndo = loadJSON(LS_LAST_UNDO, null);
+
+    // Initialize
+    amountInput.addEventListener('input', onAmountInput);
+    amountInput.addEventListener('keydown', onAmountKeyDown);
+    btnIncome.addEventListener('click', () => addTransaction('Income'));
+    btnExpense.addEventListener('click', () => addTransaction('Expense'));
+    btnUndo.addEventListener('click', undoLast);
+    snapshotBtn.addEventListener('click', takeSnapshot);
+    quickAddBtn.addEventListener('click', quickAddModal);
+    quickFloating.addEventListener('click', quickAddModal);
+    btnExport.addEventListener('click', exportCSV);
+    btnExportJSON.addEventListener('click', () => downloadJSON(history, 'dwp_history.json'));
+    btnImport.addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', handleImport);
+    btnApplyFilter.addEventListener('click', applyFilter);
+    btnClearFilter.addEventListener('click', clearFilter);
+    setBalanceBtn.addEventListener('click', setBalanceFromAdmin);
+    balanceInput.addEventListener('input', onAdminBalanceInput);
+    clearAllBtn.addEventListener('click', clearAllData);
+    downloadLogsBtn.addEventListener('click', () => downloadJSON(history, 'dwp_history.json'));
+    targetDaysInput.addEventListener('input', onTargetChange);
+    targetMode.addEventListener('change', onTargetChange);
+
+    // Allow quick delete by longpress in admin log? (kept out for simplicity)
+    // Render initial UI
+    updateUI();
+
+    // ---------------- Helpers ----------------
+    function el(id) { return document.getElementById(id); }
+
+    function loadJSON(key, fallback) {
+        try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback }
+        catch(e){ return fallback }
+    }
+    function saveJSON(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+
+    function loadNumber(key, fallback) {
+        const v = localStorage.getItem(key);
+        return v === null ? fallback : Number(v);
+    }
+    function saveNumber(key, value) { localStorage.setItem(key, String(value)); }
+
+    function nowKey(d = new Date()) {
+        return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
+    }
+    function nowTime(d = new Date()){
+        return d.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+    }
+    function displayDateTime(d = new Date()){
+        return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${nowTime(d)}`;
     }
 
-    function parseRupiah(value) {
-        if (typeof value !== 'string') value = value.toString();
-        // Removes dots and commas to get pure number
-        const cleanValue = value.replace(/\./g, '').replace(/,/g, '');
-        return Number(cleanValue);
+    // Parse input like "20.000", "20,000" or "20000" to integer
+    function parseRupiah(input) {
+        if (input === undefined || input === null) return NaN;
+        let s = String(input).trim();
+        // Remove non-numeric except comma/dot for thousands separators
+        // We assume no decimals for IDR; remove everything but digits
+        s = s.replace(/[^\d]/g,'');
+        return s === '' ? NaN : Number(s);
     }
 
-    function formatRupiah(value) {
-        return value.toLocaleString('id-ID');
+    function formatRupiah(num) {
+        if (isNaN(num) || num === null) return '0';
+        return Number(num).toLocaleString('id-ID');
     }
 
-    function setBalance() {
-        const raw = document.getElementById('balanceInput').value;
-        const amount = parseRupiah(raw);
-        if (isNaN(amount) || raw === '') return alert("Please enter a valid number");
-
-        balance = amount;
-        save();
-        updateUI();
-        document.getElementById('balanceInput').value = '';
-        alert("Balance updated.");
+    // Auto-format input while preserving caret roughly (simple implementation)
+    function onAmountInput(e) {
+        const raw = e.target.value;
+        const numeric = raw.replace(/[^\d]/g,'');
+        if (numeric === '') { e.target.value=''; return; }
+        const formatted = formatRupiah(Number(numeric));
+        e.target.value = formatted;
     }
 
+    function onAdminBalanceInput(e) {
+        // same formatting
+        onAmountInput(e);
+    }
+
+    function onAmountKeyDown(e){
+        if (e.key === 'Enter') addTransaction('Expense'); // quick enter -> expense
+    }
+
+    // Add transaction
     function addTransaction(type) {
-        const amtInput = document.getElementById('amount');
-        const amount = parseRupiah(amtInput.value);
-        const note = document.getElementById('note').value || 'No note';
+        const amtRaw = amountInput.value;
+        const amount = parseRupiah(amtRaw);
+        const note = (noteInput.value || '').trim() || (type === 'Income' ? 'Income' : 'Expense');
 
-        if (isNaN(amount) || amount <= 0) return alert("Please enter a valid amount");
+        if (isNaN(amount) || amount <= 0) { alert('Enter a valid amount'); return; }
 
-        balance += type === 'Income' ? amount : -amount;
-
-        history.push({
+        // push to history
+        const t = {
             id: Date.now(),
             type,
             amount,
             note,
-            time: new Date().toLocaleString()
-        });
+            timestamp: new Date().toISOString(),
+            dateKey: nowKey(),
+            fullDate: displayDateTime()
+        };
 
-        save();
+        // Save undo state
+        lastUndo = { action: 'add', transaction: t, prevBalance: balance };
+        saveJSON(LS_LAST_UNDO, lastUndo);
+
+        // Update balance
+        balance = balance + (type === 'Income' ? amount : -amount);
+
+        history.push(t);
+        persistAll();
+        amountInput.value = '';
+        noteInput.value = '';
         updateUI();
-        amtInput.value = '';
-        document.getElementById('note').value = '';
     }
 
-    function deleteLog(id) {
-        if (!confirm("Delete this log and adjust balance?")) return;
-        
-        const index = history.findIndex(item => item.id === id);
-        if (index > -1) {
-            const item = history[index];
-            balance -= item.type === 'Income' ? item.amount : -item.amount;
-            history.splice(index, 1);
-            save();
+    // Undo last action
+    function undoLast() {
+        const undo = loadJSON(LS_LAST_UNDO, null);
+        if (!undo) { alert('No action to undo'); return; }
+
+        if (undo.action === 'add') {
+            // remove transaction by id
+            const tid = undo.transaction.id;
+            const idx = history.findIndex(h => h.id === tid);
+            if (idx > -1) history.splice(idx,1);
+            balance = undo.prevBalance;
+            lastUndo = null;
+            persistAll();
             updateUI();
+            alert('Last transaction undone');
+            return;
         }
+        alert('Nothing undone');
     }
 
-    function updateUI() {
-        document.getElementById('balanceText').innerText = `Rp ${formatRupiah(balance)}`;
-        const list = document.getElementById('historyList');
-        const sortedHistory = [...history].reverse();
-        
-        list.innerHTML = sortedHistory.slice(0, 5).map(h => `
-            <li>
-                <div>
-                    <strong>${h.type}</strong><br>
-                    <span class="muted">${h.note}</span>
-                </div>
-                <div style="color: ${h.type === 'Expense' ? '#ff5c5c' : '#2ecc71'}">
-                    ${h.type === 'Expense' ? '-' : '+'} ${formatRupiah(h.amount)}
-                </div>
-            </li>
-        `).join('');
-
-        const adminList = document.getElementById('adminLogList');
-        adminList.innerHTML = sortedHistory.map(h => `
-            <li>
-                <div style="font-size: 0.8rem">
-                    <strong>${h.type}</strong> - ${formatRupiah(h.amount)}<br>
-                    <span class="muted">${h.time}</span>
-                </div>
-                <button class="btn-delete" onclick="deleteLog(${h.id})">Delete</button>
-            </li>
-        `).join('');
+    // Snapshot (balance checkpoint)
+    function takeSnapshot() {
+        const t = {
+            id: Date.now(),
+            type: 'Snapshot',
+            amount: balance,
+            note: 'Snapshot',
+            timestamp: new Date().toISOString(),
+            dateKey: nowKey(),
+            fullDate: displayDateTime()
+        };
+        history.push(t);
+        saveJSON(LS_HISTORY, history);
+        updateUI();
+        alert('Snapshot recorded');
     }
 
-    function save() {
-        localStorage.setItem('balance', balance);
-        localStorage.setItem('history', JSON.stringify(history));
+    // Quick add modal (simple prompt)
+    function quickAddModal() {
+        const v = prompt('Quick add amount (e.g. 50.000)');
+        if (!v) return;
+        const amount = parseRupiah(v);
+        if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
+        const t = {
+            id: Date.now(),
+            type: 'Income',
+            amount,
+            note: 'Quick Add',
+            timestamp: new Date().toISOString(),
+            dateKey: nowKey(),
+            fullDate: displayDateTime()
+        };
+        lastUndo = { action:'add', transaction: t, prevBalance: balance };
+        saveJSON(LS_LAST_UNDO, lastUndo);
+        balance += amount;
+        history.push(t);
+        persistAll();
+        updateUI();
     }
 
-    updateUI();
-</script>
+    // Export CSV
+    function exportCSV() {
+        if (!history.length) { alert('No logs to export'); return; }
+        const header = ['id','type','amount','note','fullDate','timestamp'];
+        const rows = history.map(h => [h.id,h.type,h.amount, `"${(h.note||'').replace(/"/g,'""')}"`, h.fullDate, h.timestamp]);
+        const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
+        downloadFile(csv, 'text/csv', `dwp_history_${Date.now()}.csv`);
+    }
 
-</body>
-                                                           </html>
-    
+    function downloadJSON(obj, filename='data.json') {
+        const text = JSON.stringify(obj, null, 2);
+        downloadFile(text, 'application/json', filename);
+    }
+
+    function downloadFile(text, mime, filename) {
+        const b = new Blob([text], {type:mime});
+        const url = URL.createObjectURL(b);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    // Import JSON
+    function handleImport(e) {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const parsed = JSON.parse(reader.result);
+                if (!Array.isArray(parsed)) throw new Error('Expected an array of history items');
+                // Merge with existing (simple dedup by id)
+                const existingIds = new Set(history.map(h=>h.id));
+                parsed.forEach(item => {
+                    if (!existingIds.has(item.id)) history.push(item);
+                });
+                persistAll();
+                updateUI();
+                alert('Import complete');
+            } catch(err) {
+                alert('Import failed: ' + err.message);
+            }
+        };
+        reader.readAsText(f);
+        importFile.value = '';
+    }
+
+    // Filtering UI
+    function applyFilter() {
+        const type = filterType.value;
+        const from = filterFrom.value ? new Date(filterFrom.value) : null;
+        const to = filterTo.value ? new Date(filterTo.value) : null;
+        const filtered = history.filter(h => {
+            if (type !== 'all' && h.type !== type) return false;
+            const dt = new Date(h.timestamp);
+            if (from && dt < from) return false;
+            if (to) {
+                // include whole day
+                const toEnd = new Date(to); toEnd.setHours(23,59,59,999);
+                if (dt > toEnd) return false;
+            }
+            return true;
+        });
+        renderHistory(filtered);
+    }
+    function clearFilter() {
+        filterType.value = 'all';
+        filterFrom.value = '';
+        filterTo.value = '';
+        renderHistory(history.slice().reverse());
+    }
+
+    // Admin functions
+    function setBalanceFromAdmin() {
+        const val = balanceInput.value;
+        const parsed = parseRupiah(val);
+        if (isNaN(parsed)) { alert('Invalid number'); return; }
+        if (!confirm('Overwrite balance? This will be recorded as an admin snapshot.')) return;
+        // record snapshot of previous and new
+        const before = {
+            id: Date.now()+1,
+            type: 'Snapshot',
+            amount: parsed,
+            note: 'Admin overwrite',
+            timestamp: new Date().toISOString(),
+            
