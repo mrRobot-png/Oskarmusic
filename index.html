@@ -13,6 +13,8 @@
         padding: 20px;
         max-width: 500px;
         margin: auto;
+        /* Prevent pull-to-refresh issues on mobile */
+        overscroll-behavior-y: contain; 
     }
 
     .card {
@@ -41,6 +43,8 @@
         border-radius: 8px;
         color: white;
         box-sizing: border-box;
+        /* Fixes "unclickable" issues by ensuring proper touch area */
+        font-size: 16px; 
     }
 
     button {
@@ -52,17 +56,17 @@
         font-weight: bold;
         cursor: pointer;
         transition: opacity 0.2s;
+        touch-action: manipulation;
     }
 
     button:active { opacity: 0.7; }
-
     .green { background: #2ecc71; color: white; }
     .red { background: #ff5c5c; color: white; }
     .blue { background: #4aa3ff; color: white; }
     
     .btn-delete {
         background: #ff5c5c;
-        padding: 4px 8px;
+        padding: 6px 12px;
         font-size: 0.7rem;
         width: auto;
         margin: 0;
@@ -80,7 +84,6 @@
 
     .muted { color: #a0a3bd; font-size: 0.8rem; }
     
-    /* Initially hidden Admin Section */
     #adminSection { 
         display: none; 
         border-top: 2px dashed rgba(255,255,255,0.2); 
@@ -99,8 +102,14 @@
 
 <div class="card">
     <h3>Add Transaction</h3>
-    <input type="text" id="amount" placeholder="Amount (e.g. 20.000)" oninput="checkCommand(this.value)">
-    <input type="text" id="note" placeholder="Description">
+    <input type="text" id="amount" 
+           inputmode="decimal" 
+           placeholder="Amount (e.g. 20.000)" 
+           oninput="checkCommand(this.value)"
+           autocomplete="off">
+    
+    <input type="text" id="note" placeholder="Description" autocomplete="off">
+    
     <div style="display: flex; gap: 10px;">
         <button class="green" onclick="addTransaction('Income')">Income</button>
         <button class="red" onclick="addTransaction('Expense')">Expense</button>
@@ -115,8 +124,8 @@
 <div id="adminSection">
     <h3>Admin Panel <span style="font-size: 0.7rem; color: #ff5c5c;">(Unlocked)</span></h3>
     <div class="card">
-        <p class="muted">Reset initial funds without creating a transaction log:</p>
-        <input id="balanceInput" placeholder="New Balance Value">
+        <p class="muted">Reset initial funds (No logs):</p>
+        <input id="balanceInput" inputmode="decimal" placeholder="New Balance Value">
         <button class="blue" onclick="setBalance()">Overwrite Balance</button>
     </div>
     
@@ -130,23 +139,29 @@
     let balance = Number(localStorage.getItem('balance')) || 0;
     let history = JSON.parse(localStorage.getItem('history')) || [];
 
-    // Check for the secret /Admin command
     function checkCommand(val) {
-        if (val === '/Admin') {
+        // Trim and lowercase check to be more user friendly
+        if (val.trim() === '/Admin') {
             const adminPanel = document.getElementById('adminSection');
             const isHidden = window.getComputedStyle(adminPanel).display === 'none';
             
             adminPanel.style.display = isHidden ? 'block' : 'none';
-            document.getElementById('amount').value = ''; // Clear the command
+            
+            // Clear input and remove focus to reset the keyboard state
+            const amtInput = document.getElementById('amount');
+            amtInput.value = ''; 
+            amtInput.blur(); 
             
             if (isHidden) {
-                alert("Admin Panel Unlocked!");
+                // Delay alert slightly to let the UI finish updating
+                setTimeout(() => alert("Admin Panel Unlocked!"), 100);
             }
         }
     }
 
     function parseRupiah(value) {
         if (typeof value !== 'string') value = value.toString();
+        // Removes dots and commas to get pure number
         const cleanValue = value.replace(/\./g, '').replace(/,/g, '');
         return Number(cleanValue);
     }
@@ -164,12 +179,12 @@
         save();
         updateUI();
         document.getElementById('balanceInput').value = '';
-        alert("Balance overwritten successfully.");
+        alert("Balance updated.");
     }
 
     function addTransaction(type) {
-        const raw = document.getElementById('amount').value;
-        const amount = parseRupiah(raw);
+        const amtInput = document.getElementById('amount');
+        const amount = parseRupiah(amtInput.value);
         const note = document.getElementById('note').value || 'No note';
 
         if (isNaN(amount) || amount <= 0) return alert("Please enter a valid amount");
@@ -186,18 +201,17 @@
 
         save();
         updateUI();
-        document.getElementById('amount').value = '';
+        amtInput.value = '';
         document.getElementById('note').value = '';
     }
 
     function deleteLog(id) {
-        if (!confirm("Are you sure you want to delete this log? Balance will be adjusted.")) return;
+        if (!confirm("Delete this log and adjust balance?")) return;
         
         const index = history.findIndex(item => item.id === id);
         if (index > -1) {
             const item = history[index];
             balance -= item.type === 'Income' ? item.amount : -item.amount;
-            
             history.splice(index, 1);
             save();
             updateUI();
@@ -206,7 +220,6 @@
 
     function updateUI() {
         document.getElementById('balanceText').innerText = `Rp ${formatRupiah(balance)}`;
-
         const list = document.getElementById('historyList');
         const sortedHistory = [...history].reverse();
         
@@ -243,4 +256,5 @@
 </script>
 
 </body>
-</html>
+                                                           </html>
+    
