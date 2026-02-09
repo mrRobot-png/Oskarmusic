@@ -98,8 +98,8 @@
             <div class="chip muted">Undo: <span id="canUndo">No</span></div>
         </div>
         <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
-            <div class="chip muted">Carried Over: <span id="carryover">Rp 0</span></div>
-            <div class="chip muted">Target Days: <span id="targetDaysDisplay">—</span></div>
+            <div class="chip muted">Daily Limit: <span id="dailyLimitDisplay">—</span></div>
+            <div class="chip muted">Carryover: <span id="carryover">Rp 0</span></div>
         </div>
     </div>
 
@@ -116,7 +116,7 @@
         <button class="small-btn blue" id="saveTargetBtn" style="width:100%; margin-top:10px;">Save Target Days</button>
         <div id="targetDisplay" class="target-result" style="display:none; margin-top:10px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-end">
-                <span class="muted">Daily Budget: <br><strong id="dailyLimit" style="color:var(--accent); font-size:1.05rem">Rp 0</strong></span>
+                <span class="muted">Today's Budget: <br><strong id="dailyBudget" style="color:var(--accent); font-size:1.05rem">Rp 0</strong></span>
                 <span id="warningText" class="muted" style="font-weight:700"></span>
             </div>
             <div class="progress-container">
@@ -125,9 +125,6 @@
             <div style="display:flex; justify-content:space-between; margin-top:8px;" class="muted">
                 <span>Spent Today: <span id="spentToday">Rp 0</span></span>
                 <span>Remaining Today: <span id="remainingToday">Rp 0</span></span>
-            </div>
-            <div style="margin-top:8px; padding:8px; background:rgba(74,163,255,0.1); border-radius:8px; color:var(--accent);">
-                <strong>Carryover Applied:</strong> <span id="carryoverApplied">Rp 0</span>
             </div>
         </div>
     </div>
@@ -207,23 +204,23 @@
 <script>
 /* ---------------------------
    Smart Daily Wallet Pro JS
+   - FIXED daily limit (no recalculation)
+   - Carryover system based on fixed limit
    - Accepts 20.000 / 20,000 / 20000
    - Activity log, snapshots, undo, export/import
-   - Persistent localStorage with carryover system
-   - Auto-format input, notifications for over-limit
-   - NEW: Carryover system + permanent target days
-   - NEW: Payday detection (balance > 100000)
+   - Persistent localStorage
 ---------------------------- */
 
 (() => {
     // Keys
-    const LS_BALANCE = 'dwp_balance_v2';
-    const LS_HISTORY = 'dwp_history_v2';
-    const LS_TARGET_DAYS = 'dwp_target_days_v2';
-    const LS_TARGET_MODE = 'dwp_target_mode_v2';
-    const LS_LAST_UNDO = 'dwp_last_undo_v2';
-    const LS_CARRYOVER = 'dwp_carryover_v2';
-    const LS_LAST_CARRYOVER_DATE = 'dwp_last_carryover_date_v2';
+    const LS_BALANCE = 'dwp_balance_v3';
+    const LS_HISTORY = 'dwp_history_v3';
+    const LS_TARGET_DAYS = 'dwp_target_days_v3';
+    const LS_TARGET_MODE = 'dwp_target_mode_v3';
+    const LS_LAST_UNDO = 'dwp_last_undo_v3';
+    const LS_CARRYOVER = 'dwp_carryover_v3';
+    const LS_DAILY_LIMIT = 'dwp_daily_limit_v3';
+    const LS_LAST_CARRYOVER_DATE = 'dwp_last_carryover_date_v3';
 
     // Elements
     const balanceText = el('balanceText');
@@ -231,7 +228,7 @@
     const entryCount = el('entryCount');
     const canUndoEl = el('canUndo');
     const carryoverEl = el('carryover');
-    const targetDaysDisplay = el('targetDaysDisplay');
+    const dailyLimitDisplay = el('dailyLimitDisplay');
     const amountInput = el('amount');
     const noteInput = el('note');
     const btnIncome = el('btnIncome');
@@ -241,12 +238,11 @@
     const targetDaysInput = el('targetDays');
     const targetMode = el('targetMode');
     const targetDisplay = el('targetDisplay');
-    const dailyLimitEl = el('dailyLimit');
+    const dailyBudgetEl = el('dailyBudget');
     const spentTodayEl = el('spentToday');
     const remainingTodayEl = el('remainingToday');
     const pBar = el('pBar');
     const warningText = el('warningText');
-    const carryoverAppliedEl = el('carryoverApplied');
     const snapshotBtn = el('snapshotBtn');
     const quickAddBtn = el('quickAddBtn');
     const quickFloating = el('floatingAdd');
@@ -277,6 +273,7 @@
     let carryover = loadNumber(LS_CARRYOVER, 0);
     let targetDays = loadNumber(LS_TARGET_DAYS, 0);
     let targetModeValue = localStorage.getItem(LS_TARGET_MODE) || 'days';
+    let fixedDailyLimit = loadNumber(LS_DAILY_LIMIT, 0);
 
     // Initialize UI with saved values
     targetDaysInput.value = targetDays || '';
@@ -304,7 +301,6 @@
     targetMode.addEventListener('change', () => {
         targetModeValue = targetMode.value;
         localStorage.setItem(LS_TARGET_MODE, targetModeValue);
-        updateUI();
     });
     saveTargetBtn.addEventListener('click', saveTargetDays);
     paydayConfirmBtn.addEventListener('click', confirmPayday);
@@ -370,7 +366,7 @@
         if (e.key === 'Enter') addTransaction('Expense');
     }
 
-    // Add transaction with carryover check
+    // Add transaction
     function addTransaction(type) {
         const amtRaw = amountInput.value;
         const amount = parseRupiah(amtRaw);
@@ -573,6 +569,7 @@
         localStorage.removeItem(LS_TARGET_MODE);
         localStorage.removeItem(LS_LAST_UNDO);
         localStorage.removeItem(LS_CARRYOVER);
+        localStorage.removeItem(LS_DAILY_LIMIT);
         localStorage.removeItem(LS_LAST_CARRYOVER_DATE);
         balance = 0;
         history = [];
@@ -580,25 +577,23 @@
         carryover = 0;
         targetDays = 0;
         targetModeValue = 'days';
+        fixedDailyLimit = 0;
         updateUI();
         alert('All data cleared');
     }
 
-    // Carryover system
+    // Carryover system - only applies carryover once per day
     function applyCarryoverIfNewDay() {
         const currentDate = nowKey();
         const lastCarryoverDate = localStorage.getItem(LS_LAST_CARRYOVER_DATE);
 
-        if (lastCarryoverDate !== currentDate && targetDays > 0) {
-            // New day detected
-            const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
-            const dailyLimit = Math.max(1, Math.floor(balance / divisor));
-            
+        if (lastCarryoverDate !== currentDate && fixedDailyLimit > 0) {
+            // New day detected - calculate carryover from yesterday
             const spentYesterday = history
                 .filter(h => h.dateKey === lastCarryoverDate && h.type === 'Expense')
                 .reduce((s, h) => s + h.amount, 0);
             
-            const remainedFromYesterday = Math.max(0, dailyLimit - spentYesterday);
+            const remainedFromYesterday = Math.max(0, fixedDailyLimit - spentYesterday);
             carryover = remainedFromYesterday;
             
             localStorage.setItem(LS_LAST_CARRYOVER_DATE, currentDate);
@@ -624,12 +619,20 @@
         targetDaysInput.value = targetDays;
         targetMode.value = targetModeValue;
         
+        // Calculate and store fixed daily limit
+        const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
+        fixedDailyLimit = Math.max(1, Math.floor(balance / divisor));
+        
         localStorage.setItem(LS_TARGET_DAYS, targetDays);
         localStorage.setItem(LS_TARGET_MODE, targetModeValue);
+        localStorage.setItem(LS_DAILY_LIMIT, fixedDailyLimit);
+        localStorage.setItem(LS_LAST_CARRYOVER_DATE, nowKey());
+        carryover = 0;
         
         paydayModal.classList.remove('active');
+        persistAll();
         updateUI();
-        alert(`Target set to ${targetDays} ${targetModeValue}(s)!`);
+        alert(`Target set to ${targetDays} ${targetModeValue}(s)! Daily limit: Rp ${formatRupiah(fixedDailyLimit)}`);
     }
 
     function skipPayday() {
@@ -646,11 +649,19 @@
         targetDays = days;
         targetModeValue = targetMode.value;
         
+        // Calculate and store fixed daily limit
+        const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
+        fixedDailyLimit = Math.max(1, Math.floor(balance / divisor));
+        
         localStorage.setItem(LS_TARGET_DAYS, targetDays);
         localStorage.setItem(LS_TARGET_MODE, targetModeValue);
+        localStorage.setItem(LS_DAILY_LIMIT, fixedDailyLimit);
+        localStorage.setItem(LS_LAST_CARRYOVER_DATE, nowKey());
+        carryover = 0;
         
+        persistAll();
         updateUI();
-        alert(`Target saved: ${targetDays} ${targetModeValue}(s)`);
+        alert(`Target saved: ${targetDays} ${targetModeValue}(s)! Daily limit: Rp ${formatRupiah(fixedDailyLimit)}`);
     }
 
     // Persist
@@ -659,27 +670,24 @@
         saveJSON(LS_HISTORY, history);
         saveJSON(LS_LAST_UNDO, lastUndo);
         saveNumber(LS_CARRYOVER, carryover);
+        saveNumber(LS_DAILY_LIMIT, fixedDailyLimit);
     }
 
-    // UI update with carryover logic
+    // UI update - uses fixed daily limit
     function updateUI() {
         balanceText.innerText = `Rp ${formatRupiah(balance)}`;
         entryCount.innerText = history.length;
         lastChange.innerText = history.length ? history[history.length-1].fullDate + ' • ' + (history[history.length-1].note||'') : '—';
         canUndoEl.innerText = loadJSON(LS_LAST_UNDO, null) ? 'Yes' : 'No';
         carryoverEl.innerText = `Rp ${formatRupiah(carryover)}`;
-        targetDaysDisplay.innerText = targetDays > 0 ? `${targetDays} ${targetModeValue}(s)` : '—';
+        dailyLimitDisplay.innerText = fixedDailyLimit > 0 ? `Rp ${formatRupiah(fixedDailyLimit)}` : '—';
 
-        // Target logic with carryover
-        if (targetDays > 0 && balance > 0) {
+        // Target logic with FIXED daily limit
+        if (fixedDailyLimit > 0) {
             targetDisplay.style.display = 'block';
-            let divisor = targetDays;
-            if (targetModeValue === 'monthly') divisor = targetDays * 30;
-            const dailyLimit = Math.max(1, Math.floor(balance / divisor));
-            const availableBudget = dailyLimit + carryover;
+            const availableBudget = fixedDailyLimit + carryover;
             
-            dailyLimitEl.innerText = `Rp ${formatRupiah(availableBudget)}`;
-            carryoverAppliedEl.innerText = `Rp ${formatRupiah(carryover)}`;
+            dailyBudgetEl.innerText = `Rp ${formatRupiah(availableBudget)}`;
 
             // spent today
             const todayKey = nowKey();
@@ -739,6 +747,7 @@
         getBalance: () => balance,
         getHistory: () => history,
         getCarryover: () => carryover,
+        getDailyLimit: () => fixedDailyLimit,
         persistAll,
         takeSnapshot,
         addTransaction: (type, amount, note='') => {
