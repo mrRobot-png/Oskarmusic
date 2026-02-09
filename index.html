@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Daily Wallet Pro — Smarter</title>
+<title>Daily Wallet Pro — Smarter (Option C)</title>
 <style>
     :root {
         --bg: #0f1220;
@@ -104,8 +104,8 @@
     </div>
 
     <div class="card">
-        <h3>Target Maker</h3>
-        <p class="muted">How many days must this money last?</p>
+        <h3>Target Maker (Adaptive)</h3>
+        <p class="muted">How many days must this money last? The app will adapt based on your real spending.</p>
         <div class="row">
             <input type="number" id="targetDays" placeholder="e.g. 9">
             <select id="targetMode" title="target mode">
@@ -116,8 +116,14 @@
         <button class="small-btn blue" id="saveTargetBtn" style="width:100%; margin-top:10px;">Save Target Days</button>
         <div id="targetDisplay" class="target-result" style="display:none; margin-top:10px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-end">
-                <span class="muted">Today's Budget: <br><strong id="dailyBudget" style="color:var(--accent); font-size:1.05rem">Rp 0</strong></span>
-                <span id="warningText" class="muted" style="font-weight:700"></span>
+                <div>
+                    <span class="muted">Today's Budget: <br><strong id="dailyBudget" style="color:var(--accent); font-size:1.05rem">Rp 0</strong></span>
+                </div>
+                <div style="text-align:right">
+                    <div class="muted" style="font-size:0.9rem">Original Target: <span id="origTarget">—</span></div>
+                    <div class="muted" style="font-size:1rem; margin-top:6px">Estimate Remaining Days: <strong id="remainingDaysEstimate">—</strong></div>
+                    <div id="warningText" class="muted" style="font-weight:700; margin-top:6px;"></div>
+                </div>
             </div>
             <div class="progress-container">
                 <div id="pBar" class="progress-bar"></div>
@@ -126,6 +132,7 @@
                 <span>Spent Today: <span id="spentToday">Rp 0</span></span>
                 <span>Remaining Today: <span id="remainingToday">Rp 0</span></span>
             </div>
+            <div style="margin-top:8px" class="muted">Target started: <span id="targetStartDate">—</span></div>
         </div>
     </div>
 
@@ -211,6 +218,7 @@
     const LS_CARRYOVER = 'dwp_carryover_v3';
     const LS_DAILY_LIMIT = 'dwp_daily_limit_v3';
     const LS_LAST_CARRYOVER_DATE = 'dwp_last_carryover_date_v3';
+    const LS_TARGET_START = 'dwp_target_start_v3';
 
     // Elements
     const balanceText = el('balanceText');
@@ -256,14 +264,20 @@
     const paydayConfirmBtn = el('paydayConfirmBtn');
     const paydaySkipBtn = el('paydaySkipBtn');
 
+    // UI fields introduced
+    const origTargetEl = el('origTarget');
+    const remainingDaysEstimateEl = el('remainingDaysEstimate');
+    const targetStartDateEl = el('targetStartDate');
+
     // State
     let balance = loadNumber(LS_BALANCE, 0);
     let history = loadJSON(LS_HISTORY, []);
     let lastUndo = loadJSON(LS_LAST_UNDO, null);
     let carryover = loadNumber(LS_CARRYOVER, 0);
-    let targetDays = loadNumber(LS_TARGET_DAYS, 0);
+    let targetDays = Number(localStorage.getItem(LS_TARGET_DAYS) || 0);
     let targetModeValue = localStorage.getItem(LS_TARGET_MODE) || 'days';
     let fixedDailyLimit = loadNumber(LS_DAILY_LIMIT, 0);
+    let targetStartRaw = localStorage.getItem(LS_TARGET_START) || null;
 
     // Initialize UI
     targetDaysInput.value = targetDays || '';
@@ -307,6 +321,27 @@
     function parseRupiah(input) { let s = String(input||'').trim().replace(/[^\d]/g,''); return s === '' ? NaN : Number(s); }
     function formatRupiah(num) { return isNaN(num) ? '0' : Number(num).toLocaleString('id-ID'); }
 
+    function isoToDate(iso) {
+        try { return new Date(iso); } catch(e) { return null; }
+    }
+
+    function parseDateKey(key) {
+        // key format: d/m/yyyy
+        try {
+            if (!key) return null;
+            const parts = String(key).split('/');
+            const d = Number(parts[0]), m = Number(parts[1]) - 1, y = Number(parts[2]);
+            return new Date(y, m, d);
+        } catch (e) { return null; }
+    }
+
+    function daysBetween(a, b) {
+        const msDay = 24 * 60 * 60 * 1000;
+        const ad = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+        const bd = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+        return Math.max(0, Math.round((bd - ad) / msDay));
+    }
+
     function onAmountInput(e) {
         const numeric = e.target.value.replace(/[^\d]/g,'');
         e.target.value = numeric === '' ? '' : formatRupiah(Number(numeric));
@@ -314,7 +349,7 @@
     function onAdminBalanceInput(e) { onAmountInput(e); }
     function onAmountKeyDown(e){ if (e.key === 'Enter') addTransaction('Expense'); }
 
-    // UPDATED: Transaction Logic with Limit Warning
+    // ---------------- Transaction Logic ----------------
     function addTransaction(type) {
         const amtRaw = amountInput.value;
         const amount = parseRupiah(amtRaw);
@@ -322,17 +357,18 @@
 
         if (isNaN(amount) || amount <= 0) { alert('Enter a valid amount'); return; }
 
+        // Use today's adaptive available budget (fixedDailyLimit is kept for compatibility but we compute adaptive budget)
         if (type === 'Expense' && fixedDailyLimit > 0) {
             const todayKey = nowKey();
             const spentToday = history.filter(h => h.dateKey === todayKey && h.type === 'Expense').reduce((s,h)=>s+h.amount, 0);
-            const availableBudget = fixedDailyLimit + carryover;
+            const availableBudget = getAdaptiveDailyBudget() + carryover;
             const projectedSpend = spentToday + amount;
 
             if (projectedSpend > availableBudget) {
                 const overage = projectedSpend - availableBudget;
                 const proceed = confirm(
-                    `⚠️ WARNING: This expense would exceed your daily limit!\n\n` +
-                    `Available Budget: Rp ${formatRupiah(availableBudget)}\n` +
+                    `⚠️ WARNING: This expense would exceed your daily budget!\n\n` +
+                    `Available Budget (today): Rp ${formatRupiah(availableBudget)}\n` +
                     `Already Spent Today: Rp ${formatRupiah(spentToday)}\n` +
                     `This Expense: Rp ${formatRupiah(amount)}\n` +
                     `Overage: Rp ${formatRupiah(overage)}\n\n` +
@@ -402,6 +438,7 @@
         if (amount > 100000) showPaydayModal();
     }
 
+    // ---------------- Export / Import ----------------
     function exportCSV() {
         if (!history.length) { alert('No logs to export'); return; }
         const header = ['id','type','amount','note','fullDate','timestamp'];
@@ -471,16 +508,21 @@
 
     function clearAllData() {
         if (!confirm('Clear everything?')) return;
-        [LS_BALANCE, LS_HISTORY, LS_TARGET_DAYS, LS_TARGET_MODE, LS_LAST_UNDO, LS_CARRYOVER, LS_DAILY_LIMIT, LS_LAST_CARRYOVER_DATE].forEach(k => localStorage.removeItem(k));
-        balance = 0; history = []; lastUndo = null; carryover = 0; targetDays = 0; targetModeValue = 'days'; fixedDailyLimit = 0;
+        [LS_BALANCE, LS_HISTORY, LS_TARGET_DAYS, LS_TARGET_MODE, LS_LAST_UNDO, LS_CARRYOVER, LS_DAILY_LIMIT, LS_LAST_CARRYOVER_DATE, LS_TARGET_START].forEach(k => localStorage.removeItem(k));
+        balance = 0; history = []; lastUndo = null; carryover = 0; targetDays = 0; targetModeValue = 'days'; fixedDailyLimit = 0; targetStartRaw = null;
         updateUI(); alert('All data cleared');
     }
 
+    // ---------------- Carryover (fixed carryover per-day) ----------------
     function applyCarryoverIfNewDay() {
         const currentDate = nowKey();
         const lastCarryoverDate = localStorage.getItem(LS_LAST_CARRYOVER_DATE);
         if (lastCarryoverDate !== currentDate && fixedDailyLimit > 0) {
-            const spentYesterday = history.filter(h => h.dateKey === lastCarryoverDate && h.type === 'Expense').reduce((s, h) => s + h.amount, 0);
+            // compute spent yesterday using explicit yesterday key
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayKey = `${yesterday.getDate()}/${yesterday.getMonth()+1}/${yesterday.getFullYear()}`;
+            const spentYesterday = history.filter(h => h.dateKey === yesterdayKey && h.type === 'Expense').reduce((s, h) => s + h.amount, 0);
             carryover = Math.max(0, fixedDailyLimit - spentYesterday);
             localStorage.setItem(LS_LAST_CARRYOVER_DATE, currentDate);
             persistAll();
@@ -494,8 +536,10 @@
         if (isNaN(days) || days <= 0) { alert('Enter valid days'); return; }
         targetDays = days; targetModeValue = paydayMode.value;
         targetDaysInput.value = targetDays; targetMode.value = targetModeValue;
+        setTargetStartToday();
+        // derive a daily limit that is mathematically true for the new target
         const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
-        fixedDailyLimit = Math.max(1, Math.floor(balance / divisor));
+        fixedDailyLimit = Math.max(1, Math.floor(balance / Math.max(1, divisor)));
         localStorage.setItem(LS_DAILY_LIMIT, fixedDailyLimit);
         localStorage.setItem(LS_LAST_CARRYOVER_DATE, nowKey());
         carryover = 0; paydayModal.classList.remove('active'); persistAll(); updateUI();
@@ -507,23 +551,83 @@
         const days = Number(targetDaysInput.value);
         if (isNaN(days) || days < 0) { alert('Enter valid number'); return; }
         targetDays = days; targetModeValue = targetMode.value;
+        setTargetStartToday();
         const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
-        fixedDailyLimit = Math.max(1, Math.floor(balance / divisor));
+        fixedDailyLimit = Math.max(1, Math.floor(balance / Math.max(1, divisor)));
         localStorage.setItem(LS_DAILY_LIMIT, fixedDailyLimit);
         localStorage.setItem(LS_LAST_CARRYOVER_DATE, nowKey());
         carryover = 0; persistAll(); updateUI(); alert('Target saved');
     }
 
+    function setTargetStartToday() {
+        const todayIso = new Date().toISOString();
+        targetStartRaw = todayIso;
+        localStorage.setItem(LS_TARGET_START, todayIso);
+    }
+
+    // ---------------- Persistence ----------------
     function persistAll() {
         saveNumber(LS_BALANCE, balance);
         saveJSON(LS_HISTORY, history);
         saveJSON(LS_LAST_UNDO, lastUndo);
         saveNumber(LS_CARRYOVER, carryover);
         saveNumber(LS_DAILY_LIMIT, fixedDailyLimit);
-        localStorage.setItem(LS_TARGET_DAYS, targetDays);
+        localStorage.setItem(LS_TARGET_DAYS, String(targetDays));
         localStorage.setItem(LS_TARGET_MODE, targetModeValue);
+        if (targetStartRaw) localStorage.setItem(LS_TARGET_START, targetStartRaw);
     }
 
+    // ---------------- Adaptive Targeting / Recalculation (Option C) ----------------
+    function computeAverageDailyExpenseSinceStart() {
+        if (!targetStartRaw) return null;
+        const startDate = isoToDate(targetStartRaw);
+        if (!startDate) return null;
+        const endDate = new Date();
+        const daysElapsed = Math.max(1, daysBetween(startDate, endDate)); // >=1
+        // sum expenses from startDate (inclusive)
+        const totalExpenses = history.reduce((sum, h) => {
+            if (h.type !== 'Expense') return sum;
+            const hd = isoToDate(h.timestamp);
+            if (!hd) return sum;
+            if (hd >= new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())) {
+                return sum + h.amount;
+            }
+            return sum;
+        }, 0);
+        // If no expense recorded yet, return null to indicate insufficient data
+        if (totalExpenses === 0) return null;
+        return totalExpenses / daysElapsed;
+    }
+
+    function computeEstimatedRemainingDays() {
+        if (balance <= 0) return 0;
+        // Prefer historical average since target start if available
+        const avg = computeAverageDailyExpenseSinceStart();
+        if (avg && avg > 0) {
+            const estimate = Math.floor(balance / avg);
+            return Math.max(0, estimate);
+        }
+        // Fallback: if targetDays available, compute remaining using original divisor
+        if (targetDays > 0) {
+            // If target was in months, convert to days
+            const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
+            // remaining days if following original plan given current balance and original divisor:
+            const originalDaily = Math.max(1, Math.floor(balance / Math.max(1, divisor)));
+            // If originalDaily > 0, compute how many days that yields
+            return Math.max(0, Math.floor(balance / Math.max(1, originalDaily)));
+        }
+        // last fallback: assume 1 day
+        return Math.max(0, Math.floor(balance / 1));
+    }
+
+    function getAdaptiveDailyBudget() {
+        // daily budget = floor(balance / remainingDays)
+        const rem = computeEstimatedRemainingDays();
+        if (rem <= 0) return Math.max(0, Math.floor(balance)); // whole balance
+        return Math.max(1, Math.floor(balance / Math.max(1, rem)));
+    }
+
+    // ---------------- UI Update ----------------
     function updateUI() {
         balanceText.innerText = `Rp ${formatRupiah(balance)}`;
         entryCount.innerText = history.length;
@@ -532,20 +636,32 @@
         carryoverEl.innerText = `Rp ${formatRupiah(carryover)}`;
         dailyLimitDisplay.innerText = fixedDailyLimit > 0 ? `Rp ${formatRupiah(fixedDailyLimit)}` : '—';
 
-        if (fixedDailyLimit > 0) {
+        if (fixedDailyLimit > 0 || targetDays > 0 || targetStartRaw) {
             targetDisplay.style.display = 'block';
-            const availableBudget = fixedDailyLimit + carryover;
+            origTargetEl.innerText = targetDays > 0 ? `${targetDays} ${targetModeValue === 'monthly' ? 'month(s)' : 'day(s)'}` : '—';
+            targetStartDateEl.innerText = targetStartRaw ? (new Date(targetStartRaw).toLocaleDateString('id-ID')) : '—';
+
+            const availableBudget = getAdaptiveDailyBudget() + carryover;
             dailyBudgetEl.innerText = `Rp ${formatRupiah(availableBudget)}`;
+
             const todayKey = nowKey();
             const spentToday = history.filter(h => h.dateKey === todayKey && h.type === 'Expense').reduce((s,h)=>s+h.amount, 0);
             spentTodayEl.innerText = `Rp ${formatRupiah(spentToday)}`;
             remainingTodayEl.innerText = `Rp ${formatRupiah(Math.max(0, availableBudget - spentToday))}`;
-            let percent = (spentToday / availableBudget) * 100;
+
+            let percent = availableBudget > 0 ? (spentToday / availableBudget) * 100 : 0;
             pBar.style.width = Math.min(percent, 100) + '%';
+
             if (percent > 100) { pBar.style.background = 'var(--red)'; warningText.innerText = 'OVER LIMIT!'; warningText.style.color = 'var(--red)'; }
             else if (percent > 80) { pBar.style.background = 'var(--yellow)'; warningText.innerText = 'ALMOST FULL'; warningText.style.color = 'var(--yellow)'; }
             else { pBar.style.background = 'var(--green)'; warningText.innerText = 'SAFE'; warningText.style.color = 'var(--green)'; }
-        } else { targetDisplay.style.display = 'none'; }
+
+            const remDays = computeEstimatedRemainingDays();
+            remainingDaysEstimateEl.innerText = (remDays === Infinity || remDays === null) ? '—' : `${remDays} day(s)`;
+        } else {
+            targetDisplay.style.display = 'none';
+        }
+
         renderHistory(history.slice().reverse());
     }
 
@@ -565,21 +681,25 @@
         const idx = history.findIndex(h=>h.id===id);
         if (idx > -1) {
             const deletedTransaction = history[idx];
-            
+
             if (deletedTransaction.type === 'Income') {
+                // removing an income reduces balance by that amount
                 balance -= deletedTransaction.amount;
             } else if (deletedTransaction.type === 'Expense') {
+                // removing an expense increases balance
                 balance += deletedTransaction.amount;
             } else if (deletedTransaction.type === 'Snapshot') {
-                balance = history
-                    .filter((h, i) => h.type !== 'Snapshot' || i === idx)
-                    .reduce((sum, h) => {
-                        if (h.type === 'Income') return sum + h.amount;
-                        if (h.type === 'Expense') return sum - h.amount;
-                        return sum;
-                    }, 0);
+                // If deleting a snapshot, recompute full balance from transactions excluding that snapshot
+                // Recompute from history excluding the snapshot entry
+                const remaining = history.filter((h,i) => i !== idx);
+                const recomputed = remaining.reduce((sum, h) => {
+                    if (h.type === 'Income') return sum + h.amount;
+                    if (h.type === 'Expense') return sum - h.amount;
+                    return sum;
+                }, 0);
+                balance = recomputed;
             }
-            
+
             history.splice(idx, 1);
             persistAll();
             updateUI();
