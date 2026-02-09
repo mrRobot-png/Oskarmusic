@@ -70,6 +70,11 @@
     .danger { background: rgba(255,0,0,0.06); border:1px solid rgba(255,0,0,0.12); color:var(--red); padding:8px;border-radius:10px }
     .center { text-align:center }
     .kbd { background:rgba(0,0,0,0.25); padding:2px 6px; border-radius:6px; font-size:0.8rem; }
+    .modal-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:10000; justify-content:center; align-items:center; }
+    .modal-overlay.active { display:flex; }
+    .modal-content { background:var(--bg); border:1px solid rgba(255,255,255,0.12); border-radius:var(--radius); padding:24px; max-width:400px; width:90%; }
+    .modal-content h3 { margin-top:0; }
+    .modal-content button { width:100%; margin-top:10px; padding:10px; }
     @media (max-width:520px){ .row{flex-direction:column}}
 </style>
 </head>
@@ -92,6 +97,10 @@
             <div class="chip muted">Entries: <span id="entryCount">0</span></div>
             <div class="chip muted">Undo: <span id="canUndo">No</span></div>
         </div>
+        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+            <div class="chip muted">Carried Over: <span id="carryover">Rp 0</span></div>
+            <div class="chip muted">Target Days: <span id="targetDaysDisplay">—</span></div>
+        </div>
     </div>
 
     <div class="card">
@@ -104,6 +113,7 @@
                 <option value="monthly">Months (divide total * 30)</option>
             </select>
         </div>
+        <button class="small-btn blue" id="saveTargetBtn" style="width:100%; margin-top:10px;">Save Target Days</button>
         <div id="targetDisplay" class="target-result" style="display:none; margin-top:10px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-end">
                 <span class="muted">Daily Budget: <br><strong id="dailyLimit" style="color:var(--accent); font-size:1.05rem">Rp 0</strong></span>
@@ -115,6 +125,9 @@
             <div style="display:flex; justify-content:space-between; margin-top:8px;" class="muted">
                 <span>Spent Today: <span id="spentToday">Rp 0</span></span>
                 <span>Remaining Today: <span id="remainingToday">Rp 0</span></span>
+            </div>
+            <div style="margin-top:8px; padding:8px; background:rgba(74,163,255,0.1); border-radius:8px; color:var(--accent);">
+                <strong>Carryover Applied:</strong> <span id="carryoverApplied">Rp 0</span>
             </div>
         </div>
     </div>
@@ -171,6 +184,21 @@
 
 </div>
 
+<!-- Modal for payday prompt -->
+<div class="modal-overlay" id="paydayModal">
+    <div class="modal-content">
+        <h3>New Payday Detected! 💰</h3>
+        <p class="muted">You've added a significant balance. How many days should this last?</p>
+        <input type="number" id="paydayDays" placeholder="e.g. 14" min="1" />
+        <select id="paydayMode">
+            <option value="days">Days</option>
+            <option value="monthly">Months</option>
+        </select>
+        <button class="blue" id="paydayConfirmBtn">Confirm</button>
+        <button class="small-btn" id="paydaySkipBtn">Skip</button>
+    </div>
+</div>
+
 <div class="floating" aria-hidden="false">
     <button id="floatingAdd" class="green small-btn">＋ Add Quick Income</button>
     <button id="floatingToggleAdmin" class="small-btn">Toggle Admin</button>
@@ -181,8 +209,10 @@
    Smart Daily Wallet Pro JS
    - Accepts 20.000 / 20,000 / 20000
    - Activity log, snapshots, undo, export/import
-   - Persistent localStorage
+   - Persistent localStorage with carryover system
    - Auto-format input, notifications for over-limit
+   - NEW: Carryover system + permanent target days
+   - NEW: Payday detection (balance > 100000)
 ---------------------------- */
 
 (() => {
@@ -190,13 +220,18 @@
     const LS_BALANCE = 'dwp_balance_v2';
     const LS_HISTORY = 'dwp_history_v2';
     const LS_TARGET_DAYS = 'dwp_target_days_v2';
+    const LS_TARGET_MODE = 'dwp_target_mode_v2';
     const LS_LAST_UNDO = 'dwp_last_undo_v2';
+    const LS_CARRYOVER = 'dwp_carryover_v2';
+    const LS_LAST_CARRYOVER_DATE = 'dwp_last_carryover_date_v2';
 
     // Elements
     const balanceText = el('balanceText');
     const lastChange = el('lastChange');
     const entryCount = el('entryCount');
     const canUndoEl = el('canUndo');
+    const carryoverEl = el('carryover');
+    const targetDaysDisplay = el('targetDaysDisplay');
     const amountInput = el('amount');
     const noteInput = el('note');
     const btnIncome = el('btnIncome');
@@ -211,6 +246,7 @@
     const remainingTodayEl = el('remainingToday');
     const pBar = el('pBar');
     const warningText = el('warningText');
+    const carryoverAppliedEl = el('carryoverApplied');
     const snapshotBtn = el('snapshotBtn');
     const quickAddBtn = el('quickAddBtn');
     const quickFloating = el('floatingAdd');
@@ -227,16 +263,26 @@
     const balanceInput = el('balanceInput');
     const clearAllBtn = el('clearAllBtn');
     const downloadLogsBtn = el('downloadLogsBtn');
-    const snapshotBtnEl = el('snapshotBtn');
-    const quickAddBtnEl = el('quickAddBtn');
-    const btnExportJSONEl = el('btnExportJSON');
+    const saveTargetBtn = el('saveTargetBtn');
+    const paydayModal = el('paydayModal');
+    const paydayDays = el('paydayDays');
+    const paydayMode = el('paydayMode');
+    const paydayConfirmBtn = el('paydayConfirmBtn');
+    const paydaySkipBtn = el('paydaySkipBtn');
 
     // State
     let balance = loadNumber(LS_BALANCE, 0);
     let history = loadJSON(LS_HISTORY, []);
     let lastUndo = loadJSON(LS_LAST_UNDO, null);
+    let carryover = loadNumber(LS_CARRYOVER, 0);
+    let targetDays = loadNumber(LS_TARGET_DAYS, 0);
+    let targetModeValue = localStorage.getItem(LS_TARGET_MODE) || 'days';
 
-    // Initialize
+    // Initialize UI with saved values
+    targetDaysInput.value = targetDays || '';
+    targetMode.value = targetModeValue;
+
+    // Initialize event listeners
     amountInput.addEventListener('input', onAmountInput);
     amountInput.addEventListener('keydown', onAmountKeyDown);
     btnIncome.addEventListener('click', () => addTransaction('Income'));
@@ -255,10 +301,18 @@
     balanceInput.addEventListener('input', onAdminBalanceInput);
     clearAllBtn.addEventListener('click', clearAllData);
     downloadLogsBtn.addEventListener('click', () => downloadJSON(history, 'dwp_history.json'));
-    targetDaysInput.addEventListener('input', onTargetChange);
-    targetMode.addEventListener('change', onTargetChange);
+    targetMode.addEventListener('change', () => {
+        targetModeValue = targetMode.value;
+        localStorage.setItem(LS_TARGET_MODE, targetModeValue);
+        updateUI();
+    });
+    saveTargetBtn.addEventListener('click', saveTargetDays);
+    paydayConfirmBtn.addEventListener('click', confirmPayday);
+    paydaySkipBtn.addEventListener('click', skipPayday);
 
-    // Allow quick delete by longpress in admin log? (kept out for simplicity)
+    // Check and apply carryover from previous day
+    applyCarryoverIfNewDay();
+
     // Render initial UI
     updateUI();
 
@@ -291,8 +345,6 @@
     function parseRupiah(input) {
         if (input === undefined || input === null) return NaN;
         let s = String(input).trim();
-        // Remove non-numeric except comma/dot for thousands separators
-        // We assume no decimals for IDR; remove everything but digits
         s = s.replace(/[^\d]/g,'');
         return s === '' ? NaN : Number(s);
     }
@@ -302,7 +354,6 @@
         return Number(num).toLocaleString('id-ID');
     }
 
-    // Auto-format input while preserving caret roughly (simple implementation)
     function onAmountInput(e) {
         const raw = e.target.value;
         const numeric = raw.replace(/[^\d]/g,'');
@@ -312,15 +363,14 @@
     }
 
     function onAdminBalanceInput(e) {
-        // same formatting
         onAmountInput(e);
     }
 
     function onAmountKeyDown(e){
-        if (e.key === 'Enter') addTransaction('Expense'); // quick enter -> expense
+        if (e.key === 'Enter') addTransaction('Expense');
     }
 
-    // Add transaction
+    // Add transaction with carryover check
     function addTransaction(type) {
         const amtRaw = amountInput.value;
         const amount = parseRupiah(amtRaw);
@@ -328,7 +378,6 @@
 
         if (isNaN(amount) || amount <= 0) { alert('Enter a valid amount'); return; }
 
-        // push to history
         const t = {
             id: Date.now(),
             type,
@@ -339,11 +388,9 @@
             fullDate: displayDateTime()
         };
 
-        // Save undo state
         lastUndo = { action: 'add', transaction: t, prevBalance: balance };
         saveJSON(LS_LAST_UNDO, lastUndo);
 
-        // Update balance
         balance = balance + (type === 'Income' ? amount : -amount);
 
         history.push(t);
@@ -351,6 +398,11 @@
         amountInput.value = '';
         noteInput.value = '';
         updateUI();
+
+        // Check for payday (income > 100000)
+        if (type === 'Income' && amount > 100000) {
+            showPaydayModal();
+        }
     }
 
     // Undo last action
@@ -359,7 +411,6 @@
         if (!undo) { alert('No action to undo'); return; }
 
         if (undo.action === 'add') {
-            // remove transaction by id
             const tid = undo.transaction.id;
             const idx = history.findIndex(h => h.id === tid);
             if (idx > -1) history.splice(idx,1);
@@ -411,6 +462,10 @@
         history.push(t);
         persistAll();
         updateUI();
+
+        if (amount > 100000) {
+            showPaydayModal();
+        }
     }
 
     // Export CSV
@@ -424,8 +479,8 @@
 
     function downloadJSON(obj, filename='data.json') {
         const text = JSON.stringify(obj, null, 2);
-        downloadFile(text, 'application/json', filename);
-    }
+        downloadFile(text, 'application/json', filename)
+            }
 
     function downloadFile(text, mime, filename) {
         const b = new Blob([text], {type:mime});
@@ -447,7 +502,6 @@
             try {
                 const parsed = JSON.parse(reader.result);
                 if (!Array.isArray(parsed)) throw new Error('Expected an array of history items');
-                // Merge with existing (simple dedup by id)
                 const existingIds = new Set(history.map(h=>h.id));
                 parsed.forEach(item => {
                     if (!existingIds.has(item.id)) history.push(item);
@@ -473,7 +527,6 @@
             const dt = new Date(h.timestamp);
             if (from && dt < from) return false;
             if (to) {
-                // include whole day
                 const toEnd = new Date(to); toEnd.setHours(23,59,59,999);
                 if (dt > toEnd) return false;
             }
@@ -494,7 +547,6 @@
         const parsed = parseRupiah(val);
         if (isNaN(parsed)) { alert('Invalid number'); return; }
         if (!confirm('Overwrite balance? This will be recorded as an admin snapshot.')) return;
-        // record snapshot of previous and new
         const before = {
             id: Date.now()+1,
             type: 'Snapshot',
@@ -514,16 +566,91 @@
     }
 
     function clearAllData() {
-        if (!confirm('Clear everything (balance, logs)?')) return;
+        if (!confirm('Clear everything (balance, logs, target days)?')) return;
         localStorage.removeItem(LS_BALANCE);
         localStorage.removeItem(LS_HISTORY);
         localStorage.removeItem(LS_TARGET_DAYS);
+        localStorage.removeItem(LS_TARGET_MODE);
         localStorage.removeItem(LS_LAST_UNDO);
+        localStorage.removeItem(LS_CARRYOVER);
+        localStorage.removeItem(LS_LAST_CARRYOVER_DATE);
         balance = 0;
         history = [];
         lastUndo = null;
+        carryover = 0;
+        targetDays = 0;
+        targetModeValue = 'days';
         updateUI();
         alert('All data cleared');
+    }
+
+    // Carryover system
+    function applyCarryoverIfNewDay() {
+        const currentDate = nowKey();
+        const lastCarryoverDate = localStorage.getItem(LS_LAST_CARRYOVER_DATE);
+
+        if (lastCarryoverDate !== currentDate && targetDays > 0) {
+            // New day detected
+            const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
+            const dailyLimit = Math.max(1, Math.floor(balance / divisor));
+            
+            const spentYesterday = history
+                .filter(h => h.dateKey === lastCarryoverDate && h.type === 'Expense')
+                .reduce((s, h) => s + h.amount, 0);
+            
+            const remainedFromYesterday = Math.max(0, dailyLimit - spentYesterday);
+            carryover = remainedFromYesterday;
+            
+            localStorage.setItem(LS_LAST_CARRYOVER_DATE, currentDate);
+            persistAll();
+        }
+    }
+
+    // Payday modal
+    function showPaydayModal() {
+        paydayDays.value = '';
+        paydayMode.value = 'days';
+        paydayModal.classList.add('active');
+    }
+
+    function confirmPayday() {
+        const days = Number(paydayDays.value);
+        if (isNaN(days) || days <= 0) {
+            alert('Please enter a valid number of days');
+            return;
+        }
+        targetDays = days;
+        targetModeValue = paydayMode.value;
+        targetDaysInput.value = targetDays;
+        targetMode.value = targetModeValue;
+        
+        localStorage.setItem(LS_TARGET_DAYS, targetDays);
+        localStorage.setItem(LS_TARGET_MODE, targetModeValue);
+        
+        paydayModal.classList.remove('active');
+        updateUI();
+        alert(`Target set to ${targetDays} ${targetModeValue}(s)!`);
+    }
+
+    function skipPayday() {
+        paydayModal.classList.remove('active');
+    }
+
+    // Save target days manually
+    function saveTargetDays() {
+        const days = Number(targetDaysInput.value);
+        if (isNaN(days) || days < 0) {
+            alert('Please enter a valid number');
+            return;
+        }
+        targetDays = days;
+        targetModeValue = targetMode.value;
+        
+        localStorage.setItem(LS_TARGET_DAYS, targetDays);
+        localStorage.setItem(LS_TARGET_MODE, targetModeValue);
+        
+        updateUI();
+        alert(`Target saved: ${targetDays} ${targetModeValue}(s)`);
     }
 
     // Persist
@@ -531,31 +658,36 @@
         saveNumber(LS_BALANCE, balance);
         saveJSON(LS_HISTORY, history);
         saveJSON(LS_LAST_UNDO, lastUndo);
+        saveNumber(LS_CARRYOVER, carryover);
     }
 
-    // UI update, calculations
+    // UI update with carryover logic
     function updateUI() {
         balanceText.innerText = `Rp ${formatRupiah(balance)}`;
         entryCount.innerText = history.length;
         lastChange.innerText = history.length ? history[history.length-1].fullDate + ' • ' + (history[history.length-1].note||'') : '—';
         canUndoEl.innerText = loadJSON(LS_LAST_UNDO, null) ? 'Yes' : 'No';
+        carryoverEl.innerText = `Rp ${formatRupiah(carryover)}`;
+        targetDaysDisplay.innerText = targetDays > 0 ? `${targetDays} ${targetModeValue}(s)` : '—';
 
-        // Target logic
-        const days = Number(targetDaysInput.value) || loadNumber(LS_TARGET_DAYS, 0);
-        if (days > 0 && balance > 0) {
+        // Target logic with carryover
+        if (targetDays > 0 && balance > 0) {
             targetDisplay.style.display = 'block';
-            let divisor = days;
-            if (targetMode.value === 'monthly') divisor = days * 30;
+            let divisor = targetDays;
+            if (targetModeValue === 'monthly') divisor = targetDays * 30;
             const dailyLimit = Math.max(1, Math.floor(balance / divisor));
-            dailyLimitEl.innerText = `Rp ${formatRupiah(dailyLimit)}`;
+            const availableBudget = dailyLimit + carryover;
+            
+            dailyLimitEl.innerText = `Rp ${formatRupiah(availableBudget)}`;
+            carryoverAppliedEl.innerText = `Rp ${formatRupiah(carryover)}`;
 
             // spent today
             const todayKey = nowKey();
             const spentToday = history.filter(h => h.dateKey === todayKey && h.type === 'Expense').reduce((s,h)=>s+h.amount, 0);
             spentTodayEl.innerText = `Rp ${formatRupiah(spentToday)}`;
-            remainingTodayEl.innerText = `Rp ${formatRupiah(Math.max(0, dailyLimit - spentToday))}`;
+            remainingTodayEl.innerText = `Rp ${formatRupiah(Math.max(0, availableBudget - spentToday))}`;
 
-            let percent = (spentToday / dailyLimit) * 100;
+            let percent = (spentToday / availableBudget) * 100;
             pBar.style.width = Math.min(percent, 100) + '%';
             if (percent > 100) { pBar.style.background = 'var(--red)'; warningText.innerText = 'OVER LIMIT!'; warningText.style.color = 'var(--red)'; }
             else if (percent > 80) { pBar.style.background = 'var(--yellow)'; warningText.innerText = 'ALMOST FULL'; warningText.style.color = 'var(--yellow)'; }
@@ -568,7 +700,7 @@
     }
 
     function renderHistory(list) {
-        const top = list.slice(0, 200); // limit for performance
+        const top = list.slice(0, 200);
         historyList.innerHTML = top.map(h => {
             const sign = h.type === 'Expense' ? '-' : (h.type === 'Income' ? '+' : '');
             const color = h.type === 'Expense' ? 'color:var(--red)' : (h.type === 'Income' ? 'color:var(--green)' : 'color:var(--accent)');
@@ -585,9 +717,9 @@
         }).join('');
     }
 
-    // Delete log (global function used in markup)
+    // Delete log
     window.deleteLog = function(id) {
-        if (!confirm('Delete this log entry? This will adjust nothing automatically. Use Undo to revert recent adds.')) return;
+        if (!confirm('Delete this log entry?')) return;
         const idx = history.findIndex(h=>h.id===id);
         if (idx > -1) {
             history.splice(idx,1);
@@ -596,78 +728,17 @@
         }
     };
 
-    // Target change persists
-    function onTargetChange() {
-        saveNumber(LS_TARGET_DAYS, Number(targetDaysInput.value) || 0);
-        updateUI();
-    }
-
-    // Admin: format admin input also
-    function onAmountInput(e){ // override earlier declared to prevent duplicate
-        const raw = e.target.value;
-        // preserve minus if user types - for convenience (not necessary here)
-        const numeric = raw.replace(/[^\d]/g,'');
-        if (!numeric) e.target.value = '';
-        else e.target.value = formatRupiah(Number(numeric));
-    }
-
-    function setBalanceFromAdmin_old(){}
-    // Local helper: prompt for confirmation on unload if unsaved? not necessary
-
-    // Utility to parse admin field & update display
-    function setBalanceFromAdmin_legacy(){}
-
-    // Utilities for import/export already defined above
-
-    // small safety: autosave interval
-    setInterval(() => { persistAll(); }, 15000);
-
-    // initial persist & render
-    persistAll();
-    updateUI();
-
-    // Keyboard shortcut: Ctrl+Z -> undo
-    window.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-            e.preventDefault();
-            undoLast();
-        }
-    });
-
-    // Simple notification (if spending over limit, alert once per session)
-    (function spendingWatcher(){
-        const alertedKey = 'dwp_alerted_over';
-        const alerted = sessionStorage.getItem(alertedKey);
-        const days = Number(targetDaysInput.value) || loadNumber(LS_TARGET_DAYS, 0);
-        if (!alerted && days > 0 && balance > 0) {
-            const divisor = (targetMode.value === 'monthly') ? days*30 : days;
-            const dailyLimit = Math.max(1, Math.floor(balance/divisor));
-            const spentToday = history.filter(h => h.dateKey === nowKey() && h.type === 'Expense').reduce((s,h)=>s+h.amount,0);
-            if (spentToday > dailyLimit) {
-                alert('You are over today\'s limit.');
-                sessionStorage.setItem(alertedKey, '1');
-            }
-        }
-    })();
-
-    // helper to download JSON used elsewhere
-    function downloadJSON(data, name) {
-        downloadFile(JSON.stringify(data, null, 2), 'application/json', name);
-    }
-
-    // handle import file button accessible function
-    window.handleImport = handleImport;
-
-    // Allow toggling admin via floating button
+    // Admin: toggle visibility
     document.getElementById('floatingToggleAdmin').addEventListener('click', () => {
         const admin = document.getElementById('adminSection');
         admin.style.display = admin.style.display === 'block' ? 'none' : 'block';
     });
 
-    // expose some internals for advanced usage (console)
+    // expose internals
     window.dwp = {
         getBalance: () => balance,
         getHistory: () => history,
+        getCarryover: () => carryover,
         persistAll,
         takeSnapshot,
         addTransaction: (type, amount, note='') => {
@@ -676,6 +747,17 @@
             addTransaction(type);
         }
     };
+
+    // Auto-save interval
+    setInterval(() => { persistAll(); }, 15000);
+
+    // Keyboard shortcut: Ctrl+Z -> undo
+    window.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            undoLast();
+        }
+    });
 
 })(); // end closure
 </script>
