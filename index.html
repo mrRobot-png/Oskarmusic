@@ -573,193 +573,250 @@
         localStorage.removeItem(LS_TARGET_MODE);
         localStorage.removeItem(LS_LAST_UNDO);
         localStorage.removeItem(LS_CARRYOVER);
-        localStorage.removeItem(LS_LAST_CARRYOVER_DATE);
-        balance = 0;
-        history = [];
-        lastUndo = null;
-        carryover = 0;
-        targetDays = 0;
-        targetModeValue = 'days';
-        updateUI();
-        alert('All data cleared');
-    }
+<script>
+(() => {
+  /* =====================
+     CONSTANTS & STORAGE
+  ====================== */
+  const LS_HISTORY = 'dwp_history_v3';
+  const LS_TARGET_DAYS = 'dwp_target_days_v3';
+  const LS_TARGET_MODE = 'dwp_target_mode_v3';
+  const LS_CARRYOVER = 'dwp_carryover_v3';
+  const LS_LAST_DATE = 'dwp_last_date_v3';
+  const LS_LAST_UNDO = 'dwp_last_undo_v3';
 
-    // Carryover system
-    function applyCarryoverIfNewDay() {
-        const currentDate = nowKey();
-        const lastCarryoverDate = localStorage.getItem(LS_LAST_CARRYOVER_DATE);
+  /* =====================
+     HELPERS
+  ====================== */
+  const el = id => document.getElementById(id);
+  const todayKey = d => {
+    const x = d || new Date();
+    return `${x.getFullYear()}-${x.getMonth()+1}-${x.getDate()}`;
+  };
+  const format = n => Number(n || 0).toLocaleString('id-ID');
+  const parse = v => {
+    if (!v) return NaN;
+    const s = String(v).replace(/[^\d]/g,'');
+    return s ? Number(s) : NaN;
+  };
 
-        if (lastCarryoverDate !== currentDate && targetDays > 0) {
-            // New day detected
-            const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
-            const dailyLimit = Math.max(1, Math.floor(balance / divisor));
-            
-            const spentYesterday = history
-                .filter(h => h.dateKey === lastCarryoverDate && h.type === 'Expense')
-                .reduce((s, h) => s + h.amount, 0);
-            
-            const remainedFromYesterday = Math.max(0, dailyLimit - spentYesterday);
-            carryover = remainedFromYesterday;
-            
-            localStorage.setItem(LS_LAST_CARRYOVER_DATE, currentDate);
-            persistAll();
-        }
-    }
+  /* =====================
+     LOAD STATE
+  ====================== */
+  let history = JSON.parse(localStorage.getItem(LS_HISTORY) || '[]');
+  let targetDays = Number(localStorage.getItem(LS_TARGET_DAYS) || 0);
+  let targetMode = localStorage.getItem(LS_TARGET_MODE) || 'days';
+  let carryover = Number(localStorage.getItem(LS_CARRYOVER) || 0);
+  let lastDate = localStorage.getItem(LS_LAST_DATE) || todayKey();
+  let lastUndo = JSON.parse(localStorage.getItem(LS_LAST_UNDO) || 'null');
 
-    // Payday modal
-    function showPaydayModal() {
-        paydayDays.value = '';
-        paydayMode.value = 'days';
-        paydayModal.classList.add('active');
-    }
+  /* =====================
+     DERIVED STATE
+  ====================== */
+  function computeBalance() {
+    return history.reduce((sum,h)=>{
+      if (h.type === 'Income') return sum + h.amount;
+      if (h.type === 'Expense') return sum - h.amount;
+      return sum;
+    },0);
+  }
 
-    function confirmPayday() {
-        const days = Number(paydayDays.value);
-        if (isNaN(days) || days <= 0) {
-            alert('Please enter a valid number of days');
-            return;
-        }
-        targetDays = days;
-        targetModeValue = paydayMode.value;
-        targetDaysInput.value = targetDays;
-        targetMode.value = targetModeValue;
-        
-        localStorage.setItem(LS_TARGET_DAYS, targetDays);
-        localStorage.setItem(LS_TARGET_MODE, targetModeValue);
-        
-        paydayModal.classList.remove('active');
-        updateUI();
-        alert(`Target set to ${targetDays} ${targetModeValue}(s)!`);
-    }
+  function dailyLimit(balance) {
+    if (!targetDays) return 0;
+    const d = targetMode === 'monthly' ? targetDays * 30 : targetDays;
+    return Math.max(1, Math.floor(balance / d));
+  }
 
-    function skipPayday() {
-        paydayModal.classList.remove('active');
-    }
+  /* =====================
+     CARRYOVER (FIXED)
+  ====================== */
+  function applyCarryover() {
+    const today = todayKey();
+    if (today === lastDate) return;
 
-    // Save target days manually
-    function saveTargetDays() {
-        const days = Number(targetDaysInput.value);
-        if (isNaN(days) || days < 0) {
-            alert('Please enter a valid number');
-            return;
-        }
-        targetDays = days;
-        targetModeValue = targetMode.value;
-        
-        localStorage.setItem(LS_TARGET_DAYS, targetDays);
-        localStorage.setItem(LS_TARGET_MODE, targetModeValue);
-        
-        updateUI();
-        alert(`Target saved: ${targetDays} ${targetModeValue}(s)`);
-    }
+    const yesterday = lastDate;
+    const balanceAtEnd = computeBalance();
+    const limit = dailyLimit(balanceAtEnd);
 
-    // Persist
-    function persistAll() {
-        saveNumber(LS_BALANCE, balance);
-        saveJSON(LS_HISTORY, history);
-        saveJSON(LS_LAST_UNDO, lastUndo);
-        saveNumber(LS_CARRYOVER, carryover);
-    }
+    const spent = history
+      .filter(h => h.type === 'Expense' && h.dateKey === yesterday)
+      .reduce((s,h)=>s+h.amount,0);
 
-    // UI update with carryover logic
-    function updateUI() {
-        balanceText.innerText = `Rp ${formatRupiah(balance)}`;
-        entryCount.innerText = history.length;
-        lastChange.innerText = history.length ? history[history.length-1].fullDate + ' • ' + (history[history.length-1].note||'') : '—';
-        canUndoEl.innerText = loadJSON(LS_LAST_UNDO, null) ? 'Yes' : 'No';
-        carryoverEl.innerText = `Rp ${formatRupiah(carryover)}`;
-        targetDaysDisplay.innerText = targetDays > 0 ? `${targetDays} ${targetModeValue}(s)` : '—';
+    carryover = Math.max(0, limit - spent);
+    lastDate = today;
 
-        // Target logic with carryover
-        if (targetDays > 0 && balance > 0) {
-            targetDisplay.style.display = 'block';
-            let divisor = targetDays;
-            if (targetModeValue === 'monthly') divisor = targetDays * 30;
-            const dailyLimit = Math.max(1, Math.floor(balance / divisor));
-            const availableBudget = dailyLimit + carryover;
-            
-            dailyLimitEl.innerText = `Rp ${formatRupiah(availableBudget)}`;
-            carryoverAppliedEl.innerText = `Rp ${formatRupiah(carryover)}`;
+    persist();
+  }
 
-            // spent today
-            const todayKey = nowKey();
-            const spentToday = history.filter(h => h.dateKey === todayKey && h.type === 'Expense').reduce((s,h)=>s+h.amount, 0);
-            spentTodayEl.innerText = `Rp ${formatRupiah(spentToday)}`;
-            remainingTodayEl.innerText = `Rp ${formatRupiah(Math.max(0, availableBudget - spentToday))}`;
+  /* =====================
+     PERSIST
+  ====================== */
+  function persist() {
+    localStorage.setItem(LS_HISTORY, JSON.stringify(history));
+    localStorage.setItem(LS_TARGET_DAYS, targetDays);
+    localStorage.setItem(LS_TARGET_MODE, targetMode);
+    localStorage.setItem(LS_CARRYOVER, carryover);
+    localStorage.setItem(LS_LAST_DATE, lastDate);
+    localStorage.setItem(LS_LAST_UNDO, JSON.stringify(lastUndo));
+  }
 
-            let percent = (spentToday / availableBudget) * 100;
-            pBar.style.width = Math.min(percent, 100) + '%';
-            if (percent > 100) { pBar.style.background = 'var(--red)'; warningText.innerText = 'OVER LIMIT!'; warningText.style.color = 'var(--red)'; }
-            else if (percent > 80) { pBar.style.background = 'var(--yellow)'; warningText.innerText = 'ALMOST FULL'; warningText.style.color = 'var(--yellow)'; }
-            else { pBar.style.background = 'var(--green)'; warningText.innerText = 'SAFE'; warningText.style.color = 'var(--green)'; }
-        } else {
-            targetDisplay.style.display = 'none';
-        }
+  /* =====================
+     TRANSACTIONS
+  ====================== */
+  function addTransaction(type) {
+    const amt = parse(el('amount').value);
+    if (!amt || amt <= 0) return alert('Invalid amount');
 
-        renderHistory(history.slice().reverse());
-    }
-
-    function renderHistory(list) {
-        const top = list.slice(0, 200);
-        historyList.innerHTML = top.map(h => {
-            const sign = h.type === 'Expense' ? '-' : (h.type === 'Income' ? '+' : '');
-            const color = h.type === 'Expense' ? 'color:var(--red)' : (h.type === 'Income' ? 'color:var(--green)' : 'color:var(--accent)');
-            return `<li>
-                        <div>
-                            <strong>${h.type}</strong><br>
-                            <div class="note">${h.fullDate} • ${h.note || ''}</div>
-                        </div>
-                        <div style="${color}; text-align:right; min-width:90px">
-                            ${sign} Rp ${formatRupiah(h.amount)}
-                            <div style="margin-top:6px"><button class="small-btn" onclick="deleteLog(${h.id})">Delete</button></div>
-                        </div>
-                    </li>`;
-        }).join('');
-    }
-
-    // Delete log
-    window.deleteLog = function(id) {
-        if (!confirm('Delete this log entry?')) return;
-        const idx = history.findIndex(h=>h.id===id);
-        if (idx > -1) {
-            history.splice(idx,1);
-            persistAll();
-            updateUI();
-        }
+    const tx = {
+      id: Date.now(),
+      type,
+      amount: amt,
+      note: el('note').value || type,
+      dateKey: todayKey(),
+      fullDate: new Date().toLocaleString('id-ID')
     };
 
-    // Admin: toggle visibility
-    document.getElementById('floatingToggleAdmin').addEventListener('click', () => {
-        const admin = document.getElementById('adminSection');
-        admin.style.display = admin.style.display === 'block' ? 'none' : 'block';
+    history.push(tx);
+    lastUndo = { action:'add', tx };
+    persist();
+    updateUI();
+
+    el('amount').value = '';
+    el('note').value = '';
+
+    if (type === 'Income' && amt >= computeBalance()*0.5) {
+      showPayday();
+    }
+  }
+
+  function undo() {
+    if (!lastUndo) return alert('Nothing to undo');
+
+    if (lastUndo.action === 'add') {
+      history = history.filter(h => h.id !== lastUndo.tx.id);
+    }
+
+    lastUndo = null;
+    persist();
+    updateUI();
+  }
+
+  function deleteLog(id) {
+    const tx = history.find(h=>h.id===id);
+    if (!tx) return;
+
+    history = history.filter(h=>h.id!==id);
+    lastUndo = { action:'delete', tx };
+    persist();
+    updateUI();
+  }
+
+  window.deleteLog = deleteLog;
+
+  /* =====================
+     SNAPSHOT (SAFE)
+  ====================== */
+  function snapshot() {
+    history.push({
+      id: Date.now(),
+      type: 'Snapshot',
+      amount: 0,
+      note: 'Snapshot',
+      dateKey: todayKey(),
+      fullDate: new Date().toLocaleString('id-ID')
     });
+    persist();
+    updateUI();
+  }
 
-    // expose internals
-    window.dwp = {
-        getBalance: () => balance,
-        getHistory: () => history,
-        getCarryover: () => carryover,
-        persistAll,
-        takeSnapshot,
-        addTransaction: (type, amount, note='') => {
-            amountInput.value = formatRupiah(amount);
-            noteInput.value = note;
-            addTransaction(type);
-        }
-    };
+  /* =====================
+     PAYDAY MODAL
+  ====================== */
+  function showPayday() {
+    el('paydayModal').classList.add('active');
+  }
+  function confirmPayday() {
+    const d = Number(el('paydayDays').value);
+    if (!d || d <= 0) return alert('Invalid days');
+    targetDays = d;
+    targetMode = el('paydayMode').value;
+    persist();
+    el('paydayModal').classList.remove('active');
+    updateUI();
+  }
+  function skipPayday() {
+    el('paydayModal').classList.remove('active');
+  }
 
-    // Auto-save interval
-    setInterval(() => { persistAll(); }, 15000);
+  /* =====================
+     UI
+  ====================== */
+  function updateUI() {
+    const balance = computeBalance();
+    el('balanceText').innerText = `Rp ${format(balance)}`;
+    el('entryCount').innerText = history.length;
+    el('canUndo').innerText = lastUndo ? 'Yes' : 'No';
+    el('carryover').innerText = `Rp ${format(carryover)}`;
+    el('targetDaysDisplay').innerText =
+      targetDays ? `${targetDays} ${targetMode}(s)` : '—';
 
-    // Keyboard shortcut: Ctrl+Z -> undo
-    window.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-            e.preventDefault();
-            undoLast();
-        }
-    });
+    renderHistory();
+    renderBudget(balance);
+  }
 
-})(); // end closure
+  function renderHistory() {
+    el('historyList').innerHTML =
+      history.slice().reverse().map(h=>`
+        <li>
+          <div>
+            <strong>${h.type}</strong>
+            <div class="note">${h.fullDate} • ${h.note}</div>
+          </div>
+          <div style="text-align:right">
+            ${h.type==='Expense'?'−':h.type==='Income'?'+':''}
+            Rp ${format(h.amount)}
+            <div>
+              <button class="small-btn" onclick="deleteLog(${h.id})">Delete</button>
+            </div>
+          </div>
+        </li>
+      `).join('');
+  }
+
+  function renderBudget(balance) {
+    if (!targetDays) {
+      el('targetDisplay').style.display='none';
+      return;
+    }
+
+    applyCarryover();
+
+    const limit = dailyLimit(balance) + carryover;
+    const spent = history
+      .filter(h=>h.type==='Expense' && h.dateKey===todayKey())
+      .reduce((s,h)=>s+h.amount,0);
+
+    const pct = Math.min(100, (spent/limit)*100 || 0);
+
+    el('targetDisplay').style.display='block';
+    el('dailyLimit').innerText = `Rp ${format(limit)}`;
+    el('spentToday').innerText = `Rp ${format(spent)}`;
+    el('remainingToday').innerText = `Rp ${format(Math.max(0,limit-spent))}`;
+    el('pBar').style.width = pct+'%';
+  }
+
+  /* =====================
+     EVENTS
+  ====================== */
+  el('btnIncome').onclick = ()=>addTransaction('Income');
+  el('btnExpense').onclick = ()=>addTransaction('Expense');
+  el('btnUndo').onclick = undo;
+  el('snapshotBtn').onclick = snapshot;
+  el('paydayConfirmBtn').onclick = confirmPayday;
+  el('paydaySkipBtn').onclick = skipPayday;
+
+  updateUI();
+})();
 </script>
 </body>
 </html>
