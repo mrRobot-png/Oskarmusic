@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Daily Wallet Pro — Smarter (Option C) - FIXED</title>
+<title>Daily Wallet Pro — Smarter (Option C)</title>
 <style>
     :root {
         --bg: #0f1220;
@@ -107,8 +107,7 @@
         <h3>Target Maker (Adaptive)</h3>
         <p class="muted">How many days must this money last? The app will adapt based on your real spending.</p>
         <div class="row">
-            <!-- FIX: Changed inputmode to ensure numeric keyboard on mobile -->
-            <input type="text" id="targetDays" placeholder="e.g. 9" inputmode="numeric">
+            <input type="number" id="targetDays" placeholder="e.g. 9">
             <select id="targetMode" title="target mode">
                 <option value="days">Days (divide total)</option>
                 <option value="monthly">Months (divide total * 30)</option>
@@ -140,8 +139,7 @@
     <div class="card" aria-labelledby="addTransactionTitle">
         <h3 id="addTransactionTitle">Add Transaction</h3>
         <div class="row">
-            <!-- FIX: Changed inputmode to ensure numeric keyboard on mobile -->
-            <input type="text" id="amount" inputmode="decimal" placeholder="Amount (e.g. 20.000)" autocomplete="off" />
+            <input type="text" id="amount" placeholder="Amount (e.g. 20.000)" autocomplete="off" />
             <input type="text" id="note" placeholder="Description (optional)" autocomplete="off" />
         </div>
         <div style="display:flex; gap:10px; margin-top:10px;">
@@ -183,13 +181,11 @@
         </div>
         <h4 style="margin-top:14px">Set Fixed Daily Limit (Optional)</h4>
         <p class="muted">This sets an immutable daily spending limit. Overrules target calculations if set. Leave blank or zero to rely only on adaptive targeting.</p>
-        <!-- FIX: Changed inputmode for numeric keyboard -->
-        <input type="text" id="fixedDailyInput" placeholder="e.g. 50.000" inputmode="decimal" />
+        <input type="text" id="fixedDailyInput" placeholder="e.g. 50.000" />
         <button class="small-btn blue" id="saveFixedDailyBtn" style="width:100%; margin-top:8px">Save Fixed Daily Limit</button>
         <h4 style="margin-top:14px">Carryover Management</h4>
         <p class="muted">Manually adjust leftover budget from previous days.</p>
-        <!-- FIX: Changed inputmode for numeric keyboard -->
-        <input type="text" id="carryoverInput" placeholder="e.g. 10000" inputmode="decimal" />
+        <input type="text" id="carryoverInput" placeholder="e.g. 10.000" />
         <button class="small-btn blue" id="saveCarryoverBtn" style="width:100%; margin-top:8px">Set Carryover</button>
     </div>
 
@@ -203,8 +199,7 @@
     <div class="modal-content">
         <h3>Quick Add Balance</h3>
         <p class="muted">Enter a new amount to <strong>set</strong> your total balance directly (not add to it).</p>
-        <!-- FIX: Changed inputmode for numeric keyboard -->
-        <input type="text" id="quickAddInput" placeholder="e.g. 1000000" style="margin-top:8px" inputmode="decimal" />
+        <input type="text" id="quickAddInput" placeholder="e.g. 1.000.000" style="margin-top:8px" />
         <button class="small-btn green" id="confirmQuickAdd">Set Balance</button>
         <button class="small-btn" id="cancelQuickAdd">Cancel</button>
     </div>
@@ -310,13 +305,36 @@
         const dt = new Date(iso);
         return isNaN(dt.getTime()) ? null : dt;
     }
-    
-    // FIX BUG 3: Normalize date to midnight for comparison
     function normalizeToMidnight(date) {
         const d = new Date(date);
         d.setHours(0, 0, 0, 0);
         return d;
     }
+
+    // AUTO-FORMATTING: Format input fields with Indonesian Rupiah thousands separator
+    function autoFormatRupiahInput(inputElement) {
+        const cursorPosition = inputElement.selectionStart;
+        const oldValue = inputElement.value;
+        const oldLength = oldValue.length;
+        
+        // Parse and reformat
+        const numericValue = parseRupiah(oldValue);
+        const formattedValue = numericValue > 0 ? formatRupiah(numericValue) : '';
+        
+        inputElement.value = formattedValue;
+        
+        // Restore cursor position accounting for added dots
+        const newLength = formattedValue.length;
+        const diff = newLength - oldLength;
+        const newCursorPosition = cursorPosition + diff;
+        inputElement.setSelectionRange(newCursorPosition, newCursorPosition);
+    }
+
+    // Add auto-formatting to amount inputs
+    amountInput.addEventListener('input', () => autoFormatRupiahInput(amountInput));
+    quickAddInput.addEventListener('input', () => autoFormatRupiahInput(quickAddInput));
+    fixedDailyInput.addEventListener('input', () => autoFormatRupiahInput(fixedDailyInput));
+    carryoverInput.addEventListener('input', () => autoFormatRupiahInput(carryoverInput));
 
     // ---------------- Initialization ----------------
     function init() {
@@ -331,8 +349,8 @@
 
         targetDaysInput.value = targetDays > 0 ? targetDays : '';
         targetModeSelect.value = targetModeValue;
-        fixedDailyInput.value = fixedDailyLimit > 0 ? fixedDailyLimit : '';
-        carryoverInput.value = carryover;
+        fixedDailyInput.value = fixedDailyLimit > 0 ? formatRupiah(fixedDailyLimit) : '';
+        carryoverInput.value = carryover !== 0 ? formatRupiah(carryover) : '';
 
         updateUI();
     }
@@ -403,7 +421,6 @@
         const newBal = parseRupiah(val);
         if (newBal < 0) { alert('Must be non-negative'); return; }
         
-        // Calculate the difference to add/subtract
         const difference = newBal - balance;
         
         if (difference !== 0) {
@@ -435,7 +452,7 @@
 
     function saveTargetDaysFn() {
         const val = targetDaysInput.value.trim();
-        targetDays = (val && !isNaN(parseInt(val,10))) ? Math.max(0, parseInt(val,10)) : 0;
+        targetDays = (val && !isNaN(val)) ? Math.max(0, parseInt(val,10)) : 0;
         targetModeValue = targetModeSelect.value;
         initTargetStart();
         persistAll();
@@ -445,7 +462,7 @@
 
     function saveFixedDailyLimitFn() {
         const val = fixedDailyInput.value.trim();
-        fixedDailyLimit = (val && !isNaN(parseRupiah(val))) ? Math.max(0, parseRupiah(val)) : 0;
+        fixedDailyLimit = parseRupiah(val);
         persistAll();
         updateUI();
         alert('Fixed daily limit saved!');
@@ -453,7 +470,7 @@
 
     function saveCarryoverFn() {
         const val = carryoverInput.value.trim();
-        carryover = (val && !isNaN(parseRupiah(val))) ? parseRupiah(val) : 0;
+        carryover = parseRupiah(val);
         persistAll();
         updateUI();
         alert('Carryover saved!');
@@ -541,8 +558,8 @@
                 
                 targetDaysInput.value = targetDays > 0 ? targetDays : '';
                 targetModeSelect.value = targetModeValue;
-                fixedDailyInput.value = fixedDailyLimit > 0 ? fixedDailyLimit : '';
-                carryoverInput.value = carryover;
+                fixedDailyInput.value = fixedDailyLimit > 0 ? formatRupiah(fixedDailyLimit) : '';
+                carryoverInput.value = carryover !== 0 ? formatRupiah(carryover) : '';
                 
                 persistAll();
                 updateUI();
@@ -629,7 +646,7 @@
         if (targetStartRaw) localStorage.setItem(LS_TARGET_START, targetStartRaw);
     }
 
-    // ---------------- FIXED Adaptive Targeting ----------------
+    // ---------------- Adaptive Targeting / Recalculation ----------------
     function computeAverageDailyExpenseSinceStart() {
         if (!targetStartRaw) return null;
         const startDate = isoToDate(targetStartRaw);
@@ -654,73 +671,25 @@
         return totalExpenses / daysElapsed;
     }
 
-    // FIXED FUNCTION: Proper remaining days calculation
     function computeEstimatedRemainingDays() {
         if (balance <= 0) return 0;
-        
-        // Try using historical average first
-        const avgDailySpent = computeAverageDailyExpenseSinceStart();
-        if (avgDailySpent && avgDailySpent > 0) {
-            const remainingDays = Math.floor(balance / avgDailySpent);
-            return Math.max(0, remainingDays);
+        const avg = computeAverageDailyExpenseSinceStart();
+        if (avg && avg > 0) {
+            const estimate = Math.floor(balance / avg);
+            return Math.max(0, estimate);
         }
-        
-        // If no historical data, use original target days logic
         if (targetDays > 0) {
-            if (targetModeValue === 'monthly') {
-                // Monthly mode: original target days * 30
-                const originalTotalDays = targetDays * 30;
-                const dailyBudget = Math.floor(balance / originalTotalDays);
-                if (dailyBudget > 0) {
-                    return Math.max(0, Math.floor(balance / dailyBudget));
-                }
-                return originalTotalDays;
-            } else {
-                // Daily mode: original target days
-                const dailyBudget = Math.floor(balance / targetDays);
-                if (dailyBudget > 0) {
-                    return Math.max(0, Math.floor(balance / dailyBudget));
-                }
-                return targetDays;
-            }
+            const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
+            const originalDaily = Math.max(1, Math.floor(balance / Math.max(1, divisor)));
+            return Math.max(0, Math.floor(balance / Math.max(1, originalDaily)));
         }
-        
-        // Default fallback: if no data at all
-        return balance > 0 ? 1 : 0;
+        return Math.max(0, Math.floor(balance / 1));
     }
 
-    // FIXED FUNCTION: Proper daily budget calculation
     function getAdaptiveDailyBudget() {
-        // If fixed daily limit is set, use it
-        if (fixedDailyLimit > 0) {
-            return fixedDailyLimit;
-        }
-        
-        const remainingDays = computeEstimatedRemainingDays();
-        
-        // Special cases
-        if (remainingDays <= 0) {
-            // If we're out of days, use whole balance
-            return Math.max(0, Math.floor(balance));
-        }
-        
-        if (remainingDays === Infinity || isNaN(remainingDays)) {
-            // Fallback: if calculation fails, use original target
-            if (targetDays > 0) {
-                if (targetModeValue === 'monthly') {
-                    return Math.max(1, Math.floor(balance / (targetDays * 30)));
-                } else {
-                    return Math.max(1, Math.floor(balance / targetDays));
-                }
-            }
-            return Math.max(1, Math.floor(balance / 30)); // Default 30 days
-        }
-        
-        // Normal case: balance divided by remaining days
-        const dailyBudget = Math.max(1, Math.floor(balance / remainingDays));
-        
-        // Ensure daily budget doesn't exceed balance
-        return Math.min(dailyBudget, balance);
+        const rem = computeEstimatedRemainingDays();
+        if (rem <= 0) return Math.max(0, Math.floor(balance));
+        return Math.max(1, Math.floor(balance / Math.max(1, rem)));
     }
 
     // ---------------- UI Update ----------------
@@ -737,45 +706,37 @@
             origTargetEl.innerText = targetDays > 0 ? `${targetDays} ${targetModeValue === 'monthly' ? 'month(s)' : 'day(s)'}` : '—';
             targetStartDateEl.innerText = targetStartRaw ? (new Date(targetStartRaw).toLocaleDateString('id-ID')) : '—';
 
-            // FIXED: Proper daily budget calculation with carryover
-            const adaptiveBudget = getAdaptiveDailyBudget();
-            const availableBudget = adaptiveBudget + carryover;
+            // CRITICAL FIX: Use fixed daily limit if set, otherwise use adaptive budget
+            let dailyBudget;
+            if (fixedDailyLimit > 0) {
+                // Use the fixed daily limit (immutable)
+                dailyBudget = fixedDailyLimit;
+            } else {
+                // Use adaptive budget calculation
+                dailyBudget = getAdaptiveDailyBudget();
+            }
+            
+            const availableBudget = dailyBudget + carryover;
             dailyBudgetEl.innerText = `Rp ${formatRupiah(availableBudget)}`;
 
             const todayKey = nowKey();
             const spentToday = history.filter(h => h.dateKey === todayKey && h.type === 'Expense').reduce((s,h)=>s+h.amount, 0);
             spentTodayEl.innerText = `Rp ${formatRupiah(spentToday)}`;
-            
-            // Remaining today should not go below 0
-            const remainingToday = Math.max(0, availableBudget - spentToday);
-            remainingTodayEl.innerText = `Rp ${formatRupiah(remainingToday)}`;
+            remainingTodayEl.innerText = `Rp ${formatRupiah(Math.max(0, availableBudget - spentToday))}`;
 
             let percent = availableBudget > 0 ? (spentToday / availableBudget) * 100 : 0;
             pBar.style.width = Math.min(percent, 100) + '%';
 
-            if (percent > 100) { 
-                pBar.style.background = 'var(--red)'; 
-                warningText.innerText = 'OVER LIMIT!'; 
-                warningText.style.color = 'var(--red)'; 
-            }
-            else if (percent > 80) { 
-                pBar.style.background = 'var(--yellow)'; 
-                warningText.innerText = 'ALMOST FULL'; 
-                warningText.style.color = 'var(--yellow)'; 
-            }
-            else { 
-                pBar.style.background = 'var(--green)'; 
-                warningText.innerText = 'SAFE'; 
-                warningText.style.color = 'var(--green)'; 
-            }
+            if (percent > 100) { pBar.style.background = 'var(--red)'; warningText.innerText = 'OVER LIMIT!'; warningText.style.color = 'var(--red)'; }
+            else if (percent > 80) { pBar.style.background = 'var(--yellow)'; warningText.innerText = 'ALMOST FULL'; warningText.style.color = 'var(--yellow)'; }
+            else { pBar.style.background = 'var(--green)'; warningText.innerText = 'SAFE'; warningText.style.color = 'var(--green)'; }
 
             const remDays = computeEstimatedRemainingDays();
-            remainingDaysEstimateEl.innerText = (remDays === Infinity || remDays === null || isNaN(remDays)) ? '—' : `${remDays} day(s)`;
+            remainingDaysEstimateEl.innerText = (remDays === Infinity || remDays === null) ? '—' : `${remDays} day(s)`;
         } else {
             targetDisplay.style.display = 'none';
         }
 
-        // Apply filters
         let filtered = history.slice();
         const filterType = historyFilter.value;
         if (filterType !== 'all') {
