@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Daily Wallet Pro — Smarter (Option C)</title>
+<title>Daily Wallet Pro — Smart Budget System</title>
 <style>
     :root {
         --bg: #0f1220;
@@ -39,18 +39,30 @@
     }
     h2,h3{margin:0 0 8px;color:var(--accent)}
     .muted{color:var(--muted);font-size:0.9rem}
+    label {
+        color: #eaeaf0;
+        font-weight: 600;
+        font-size: 0.9rem;
+        display: block;
+        margin-top: 8px;
+    }
     .balance {
         font-size:2.2rem;font-weight:700;color:var(--green);
         display:flex;justify-content:space-between;align-items:center;
     }
     .small-btn { padding:6px 10px;border-radius:10px;border:none; cursor:pointer; font-weight:600 }
+    .small-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .blue { background:var(--accent); color:white }
     .green { background:var(--green); color:#082a12 }
     .red { background:var(--red); color:white }
     input[type="text"], input[type="number"], select {
-        width:100%; padding:12px; margin-top:8px; border-radius:10px;
+        width:100%; padding:12px; margin-top:4px; border-radius:10px;
         background: rgba(255,255,255,0.04); color: #fff; border:1px solid rgba(255,255,255,0.12);
         box-sizing:border-box; font-size:1rem;
+    }
+    input:disabled, select:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
     .row { display:flex; gap:10px; }
     .row > * { flex:1; }
@@ -75,6 +87,7 @@
     .modal-content { background:var(--bg); border:1px solid rgba(255,255,255,0.12); border-radius:var(--radius); padding:24px; max-width:400px; width:90%; }
     .modal-content h3 { margin-top:0; }
     .modal-content button { width:100%; margin-top:10px; padding:10px; }
+    .info-box { background: rgba(74, 163, 255, 0.1); border:1px solid rgba(74, 163, 255, 0.3); padding:12px; border-radius:10px; margin-top:10px; }
     @media (max-width:520px){ .row{flex-direction:column}}
 </style>
 </head>
@@ -88,8 +101,8 @@
                 <div class="balance" id="balanceText">Rp 0</div>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px;min-width:180px">
-                <button class="small-btn blue" id="snapshotBtn">Take Snapshot</button>
-                <button class="small-btn green" id="quickAddBtn">Quick + Balance</button>
+                <button type="button" class="small-btn blue" id="snapshotBtn">Take Snapshot</button>
+                <button type="button" class="small-btn green" id="quickAddBtn">Quick + Balance</button>
             </div>
         </div>
         <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
@@ -97,34 +110,40 @@
             <div class="chip muted">Entries: <span id="entryCount">0</span></div>
             <div class="chip muted">Undo: <span id="canUndo">No</span></div>
         </div>
-        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
-            <div class="chip muted">Daily Limit: <span id="dailyLimitDisplay">—</span></div>
-            <div class="chip muted">Carryover: <span id="carryover">Rp 0</span></div>
-        </div>
     </div>
 
     <div class="card">
-        <h3>Target Maker (Adaptive)</h3>
-        <p class="muted">How many days must this money last? The app will adapt based on your real spending.</p>
+        <h3>Smart Budget System</h3>
+        <p class="muted">Set how many days your money should last. The budget recalculates daily based on remaining funds.</p>
         <div class="row">
-            <input type="number" id="targetDays" placeholder="e.g. 9">
-            <select id="targetMode" title="target mode">
-                <option value="days">Days (divide total)</option>
-                <option value="monthly">Months (divide total * 30)</option>
-            </select>
+            <div style="flex:1">
+                <label for="targetDays">Target Days:</label>
+                <input type="number" id="targetDays" placeholder="e.g. 10" min="1" step="1">
+            </div>
+            <div style="flex:1; display:flex; align-items:flex-end">
+                <button type="button" class="small-btn blue" id="saveTargetBtn" style="width:100%; margin-top:4px;">Start Budget</button>
+            </div>
         </div>
-        <button class="small-btn blue" id="saveTargetBtn" style="width:100%; margin-top:10px;">Save Target Days</button>
+        <button type="button" class="small-btn red" id="resetTargetBtn" style="width:100%; margin-top:10px; display:none;">Reset Budget System</button>
+        
         <div id="targetDisplay" class="target-result" style="display:none; margin-top:10px;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-end">
-                <div>
-                    <span class="muted">Today's Budget: <br><strong id="dailyBudget" style="color:var(--accent); font-size:1.05rem">Rp 0</strong></span>
+            <div class="info-box">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px">
+                    <div>
+                        <span class="muted">Days Remaining:</span><br>
+                        <strong id="daysRemaining" style="color:var(--accent); font-size:1.4rem">0</strong>
+                    </div>
+                    <div style="text-align:right">
+                        <span class="muted">Today's Daily Limit:</span><br>
+                        <strong id="dailyBudget" style="color:var(--green); font-size:1.4rem">Rp 0</strong>
+                    </div>
                 </div>
-                <div style="text-align:right">
-                    <div class="muted" style="font-size:0.9rem">Original Target: <span id="origTarget">—</span></div>
-                    <div class="muted" style="font-size:1rem; margin-top:6px">Estimate Remaining Days: <strong id="remainingDaysEstimate">—</strong></div>
-                    <div id="warningText" class="muted" style="font-weight:700; margin-top:6px;"></div>
+                <div id="carryoverInfo" style="display:none; margin-top:8px; padding:8px; background:rgba(255,92,92,0.1); border-radius:8px;">
+                    <span class="muted">Carryover from yesterday:</span><br>
+                    <strong style="color:var(--red)">- Rp <span id="carryoverAmount">0</span></strong>
                 </div>
             </div>
+
             <div class="progress-container">
                 <div id="pBar" class="progress-bar"></div>
             </div>
@@ -132,506 +151,576 @@
                 <span>Spent Today: <span id="spentToday">Rp 0</span></span>
                 <span>Remaining Today: <span id="remainingToday">Rp 0</span></span>
             </div>
-            <div style="margin-top:8px" class="muted">Target started: <span id="targetStartDate">—</span></div>
+            <div id="warningText" class="muted" style="font-weight:700; margin-top:8px; text-align:center"></div>
+            <div style="margin-top:12px" class="muted">
+                <div>Started: <span id="targetStartDate">—</span> (Day <span id="currentDay">1</span>)</div>
+                <div>Original Target: <span id="origTarget">—</span> days</div>
+                <div>Starting Balance: <span id="startingBalance">Rp 0</span></div>
+            </div>
         </div>
     </div>
 
     <div class="card" aria-labelledby="addTransactionTitle">
         <h3 id="addTransactionTitle">Add Transaction</h3>
         <div class="row">
-            <input type="text" id="amount" placeholder="Amount (e.g. 20.000)" autocomplete="off" />
-            <input type="text" id="note" placeholder="Description (optional)" autocomplete="off" />
+            <div style="flex:1">
+                <label for="amount">Amount (Rp):</label>
+                <input type="text" id="amount" placeholder="e.g. 20.000" autocomplete="off" inputmode="numeric" pattern="[0-9.]*" />
+            </div>
+            <div style="flex:1">
+                <label for="note">Description:</label>
+                <input type="text" id="note" placeholder="Optional note" autocomplete="off" />
+            </div>
         </div>
         <div style="display:flex; gap:10px; margin-top:10px;">
-            <button class="small-btn green" id="btnIncome">Income</button>
-            <button class="small-btn red" id="btnExpense">Expense</button>
-            <button class="small-btn blue" id="btnUndo" title="Undo last transaction">Undo</button>
+            <button type="button" class="small-btn green" id="btnIncome">Income</button>
+            <button type="button" class="small-btn red" id="btnExpense">Expense</button>
+            <button type="button" class="small-btn blue" id="btnUndo" title="Undo last transaction (Ctrl+Z)">Undo</button>
         </div>
 
         <div class="controls" style="margin-top:12px">
-            <button class="small-btn" id="btnExport">Export CSV</button>
-            <button class="small-btn" id="btnExportJSON">Export JSON</button>
+            <button type="button" class="small-btn" id="btnExport">Export CSV</button>
+            <button type="button" class="small-btn" id="btnExportJSON">Export JSON</button>
             <input type="file" id="importFile" style="display:none;" accept=".json" />
-            <button class="small-btn" id="btnImport">Import JSON</button>
+            <button type="button" class="small-btn" id="btnImport">Import JSON</button>
         </div>
     </div>
 
     <div class="card">
         <h3>History</h3>
         <div class="filter-row">
+            <label for="historyFilter" style="display:inline; margin:0; font-weight:normal;">Filter:</label>
             <select id="historyFilter" class="small">
                 <option value="all">All</option>
                 <option value="Income">Income</option>
                 <option value="Expense">Expense</option>
-                <option value="Snapshot">Snapshot</option>
             </select>
-            <input type="text" id="searchNote" placeholder="Search description..." class="small" style="flex:1" />
-            <button class="small-btn" id="btnClearFilters">Clear</button>
+            <label for="searchNote" style="display:inline; margin:0; font-weight:normal;">Search:</label>
+            <input type="text" id="searchNote" class="small" placeholder="Search notes..." autocomplete="off" style="margin-top:0;" />
         </div>
         <ul id="historyList"></ul>
     </div>
 
-    <div class="card" id="adminSection" style="display:none">
-        <h3 style="color:var(--yellow)">Admin Panel</h3>
-        <div class="danger">
-            <strong>⚠️ Danger Zone:</strong>
-            <p style="margin:4px 0 10px">Actions here cannot be easily undone.</p>
-            <button class="small-btn red" id="btnClearAll" style="margin-right:6px">Clear All Data</button>
-            <button class="small-btn" id="btnImportReplace">Import & Replace All</button>
-        </div>
-        <h4 style="margin-top:14px">Set Fixed Daily Limit (Optional)</h4>
-        <p class="muted">This sets an immutable daily spending limit. Overrules target calculations if set. Leave blank or zero to rely only on adaptive targeting.</p>
-        <input type="text" id="fixedDailyInput" placeholder="e.g. 50.000" />
-        <button class="small-btn blue" id="saveFixedDailyBtn" style="width:100%; margin-top:8px">Save Fixed Daily Limit</button>
-        <h4 style="margin-top:14px">Carryover Management</h4>
-        <p class="muted">Manually adjust leftover budget from previous days.</p>
-        <input type="text" id="carryoverInput" placeholder="e.g. 10.000" />
-        <button class="small-btn blue" id="saveCarryoverBtn" style="width:100%; margin-top:8px">Set Carryover</button>
+    <div id="adminSection" class="card" style="display:none;">
+        <h3>Admin Controls</h3>
+        <p class="danger center">⚠️ DANGER ZONE ⚠️</p>
+        <button type="button" class="small-btn red" id="btnClearAll" style="width:100%">Clear All Data</button>
+        <button type="button" class="small-btn blue" id="btnEditBalance" style="width:100%; margin-top:10px">Edit Balance Manually</button>
     </div>
 
     <div class="floating">
-        <button class="small-btn" id="floatingToggleAdmin" style="padding:10px 14px">⚙️ Admin</button>
+        <button type="button" class="small-btn blue" id="floatingToggleAdmin">Admin</button>
     </div>
 
-</div>
-
-<div class="modal-overlay" id="quickAddModal">
-    <div class="modal-content">
-        <h3>Quick Add Balance</h3>
-        <p class="muted">Enter a new amount to <strong>set</strong> your total balance directly (not add to it).</p>
-        <input type="text" id="quickAddInput" placeholder="e.g. 1.000.000" style="margin-top:8px" />
-        <button class="small-btn green" id="confirmQuickAdd">Set Balance</button>
-        <button class="small-btn" id="cancelQuickAdd">Cancel</button>
+    <div id="editBalanceModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="editBalanceTitle">
+        <div class="modal-content">
+            <h3 id="editBalanceTitle">Edit Balance</h3>
+            <p class="muted">Set a new balance directly. This will create a log entry.</p>
+            <label for="manualBalanceInput">New Balance:</label>
+            <input type="number" id="manualBalanceInput" placeholder="New balance" />
+            <button type="button" class="small-btn green" id="confirmManualBalance">Confirm</button>
+            <button type="button" class="small-btn" id="cancelManualBalance">Cancel</button>
+        </div>
     </div>
+
 </div>
 
 <script>
-(function(){
-    "use strict";
+(function() {
+    'use strict';
 
-    const LS_BALANCE = 'dailyWalletBalance';
-    const LS_HISTORY = 'dailyWalletHistory';
-    const LS_LAST_UNDO = 'dailyWalletLastUndo';
-    const LS_TARGET_DAYS = 'dailyWalletTargetDays';
-    const LS_TARGET_MODE = 'dailyWalletTargetMode';
-    const LS_TARGET_START = 'dailyWalletTargetStart';
-    const LS_CARRYOVER = 'dailyWalletCarryover';
-    const LS_DAILY_LIMIT = 'dailyWalletDailyLimit';
+    const LS_BALANCE = 'balance';
+    const LS_HISTORY = 'history';
+    const LS_LAST_UNDO = 'lastUndo';
+    const LS_TARGET_DAYS = 'targetDays';
+    const LS_TARGET_START = 'targetStart';
+    const LS_STARTING_BALANCE = 'startingBalance';
+    const LS_CARRYOVER = 'carryover';
+    const LS_LAST_CHECK_DATE = 'lastCheckDate';
+    const LS_TODAY_BUDGET = 'todayBudget';
 
     let balance = 0;
     let history = [];
     let lastUndo = null;
     let targetDays = 0;
-    let targetModeValue = 'days';
     let targetStartRaw = null;
+    let startingBalance = 0;
     let carryover = 0;
-    let fixedDailyLimit = 0;
+    let lastCheckDate = null;
+    let todayBudget = 0;
+
+    // AUDIT FIX: Create reusable NumberFormat for performance
+    const rupiahFormatter = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
     const balanceText = document.getElementById('balanceText');
     const entryCount = document.getElementById('entryCount');
     const lastChange = document.getElementById('lastChange');
     const canUndoEl = document.getElementById('canUndo');
-    const carryoverEl = document.getElementById('carryover');
-    const dailyLimitDisplay = document.getElementById('dailyLimitDisplay');
+    const historyList = document.getElementById('historyList');
+    const historyFilter = document.getElementById('historyFilter');
+    const searchNote = document.getElementById('searchNote');
     const targetDisplay = document.getElementById('targetDisplay');
+    const daysRemainingEl = document.getElementById('daysRemaining');
     const dailyBudgetEl = document.getElementById('dailyBudget');
     const spentTodayEl = document.getElementById('spentToday');
     const remainingTodayEl = document.getElementById('remainingToday');
-    const origTargetEl = document.getElementById('origTarget');
-    const remainingDaysEstimateEl = document.getElementById('remainingDaysEstimate');
-    const targetStartDateEl = document.getElementById('targetStartDate');
     const pBar = document.getElementById('pBar');
     const warningText = document.getElementById('warningText');
-    const historyList = document.getElementById('historyList');
+    const targetStartDateEl = document.getElementById('targetStartDate');
+    const origTargetEl = document.getElementById('origTarget');
+    const startingBalanceEl = document.getElementById('startingBalance');
+    const currentDayEl = document.getElementById('currentDay');
+    const carryoverInfoEl = document.getElementById('carryoverInfo');
+    const carryoverAmountEl = document.getElementById('carryoverAmount');
+    const editBalanceModal = document.getElementById('editBalanceModal');
 
-    const amountInput = document.getElementById('amount');
-    const noteInput = document.getElementById('note');
-    const btnIncome = document.getElementById('btnIncome');
-    const btnExpense = document.getElementById('btnExpense');
-    const btnUndo = document.getElementById('btnUndo');
-    const btnExport = document.getElementById('btnExport');
-    const btnExportJSON = document.getElementById('btnExportJSON');
-    const btnImport = document.getElementById('btnImport');
-    const importFile = document.getElementById('importFile');
-    const btnClearAll = document.getElementById('btnClearAll');
-    const btnImportReplace = document.getElementById('btnImportReplace');
-
-    const snapshotBtn = document.getElementById('snapshotBtn');
-    const quickAddBtn = document.getElementById('quickAddBtn');
-    const quickAddModal = document.getElementById('quickAddModal');
-    const confirmQuickAdd = document.getElementById('confirmQuickAdd');
-    const cancelQuickAdd = document.getElementById('cancelQuickAdd');
-    const quickAddInput = document.getElementById('quickAddInput');
-
-    const targetDaysInput = document.getElementById('targetDays');
-    const targetModeSelect = document.getElementById('targetMode');
-    const saveTargetBtn = document.getElementById('saveTargetBtn');
-
-    const historyFilter = document.getElementById('historyFilter');
-    const searchNote = document.getElementById('searchNote');
-    const btnClearFilters = document.getElementById('btnClearFilters');
-
-    const fixedDailyInput = document.getElementById('fixedDailyInput');
-    const saveFixedDailyBtn = document.getElementById('saveFixedDailyBtn');
-    const carryoverInput = document.getElementById('carryoverInput');
-    const saveCarryoverBtn = document.getElementById('saveCarryoverBtn');
-
-    // ---------------- Helpers ----------------
-    function saveNumber(key, val) { localStorage.setItem(key, String(val)); }
-    function loadNumber(key, def) { const v = localStorage.getItem(key); return (v && !isNaN(v)) ? Number(v) : def; }
-    function saveJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
-    function loadJSON(key, def) { const v = localStorage.getItem(key); try { return v ? JSON.parse(v) : def; } catch { return def; } }
-    function formatRupiah(n) { return String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
-    function parseRupiah(str) {
-        const cleaned = str.replace(/\./g, '').replace(/[^\d]/g, '');
-        const num = parseInt(cleaned, 10);
-        return isNaN(num) ? 0 : num;
+    // ---------------- Utility ----------------
+    function saveNumber(key, val) { localStorage.setItem(key, val.toString()); }
+    function loadNumber(key, def=0) { const v = localStorage.getItem(key); return v === null ? def : parseFloat(v); }
+    function saveJSON(key, obj) { localStorage.setItem(key, JSON.stringify(obj)); }
+    function loadJSON(key, def=null) { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
+    function removeItem(key) { localStorage.removeItem(key); }
+    
+    // AUDIT FIX: Use reusable formatter for performance
+    function formatRupiah(n) { 
+        return rupiahFormatter.format(Math.abs(n)); 
     }
-    function nowKey() {
-        const now = new Date();
-        return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+    
+    // AUDIT FIX: Properly handle Indonesian thousand separators (dots)
+    function parseAmount(str) {
+        // Remove dots (thousand separators) and any non-digit characters except minus
+        const cleaned = str.replace(/\./g, '').replace(/[^\d-]/g, '');
+        return parseFloat(cleaned) || 0;
     }
-    function nowDateTime() {
-        const now = new Date();
-        const y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0'), d=String(now.getDate()).padStart(2,'0');
-        const h=String(now.getHours()).padStart(2,'0'), min=String(now.getMinutes()).padStart(2,'0'), s=String(now.getSeconds()).padStart(2,'0');
-        return `${y}-${m}-${d} ${h}:${min}:${s}`;
-    }
-    function daysBetween(d1, d2) {
-        const ms = d2 - d1;
-        return Math.floor(ms / (1000*60*60*24));
-    }
-    function isoToDate(iso) {
-        const dt = new Date(iso);
-        return isNaN(dt.getTime()) ? null : dt;
-    }
-    function normalizeToMidnight(date) {
-        const d = new Date(date);
-        d.setHours(0, 0, 0, 0);
-        return d;
+    
+    function nowKey() { 
+        const d = new Date(); 
+        return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`; 
     }
 
-    // AUTO-FORMATTING: Format input fields with Indonesian Rupiah thousands separator
-    function autoFormatRupiahInput(inputElement) {
-        const cursorPosition = inputElement.selectionStart;
-        const oldValue = inputElement.value;
-        const oldLength = oldValue.length;
-        
-        // Parse and reformat
-        const numericValue = parseRupiah(oldValue);
-        const formattedValue = numericValue > 0 ? formatRupiah(numericValue) : '';
-        
-        inputElement.value = formattedValue;
-        
-        // Restore cursor position accounting for added dots
-        const newLength = formattedValue.length;
-        const diff = newLength - oldLength;
-        const newCursorPosition = cursorPosition + diff;
-        inputElement.setSelectionRange(newCursorPosition, newCursorPosition);
+    // AUDIT FIX: Clean up old daily limit keys
+    function cleanupOldDailyLimits() {
+        const today = nowKey();
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('dailyLimit_') && key !== 'dailyLimit_' + today) {
+                const dateStr = key.replace('dailyLimit_', '');
+                const date = new Date(dateStr);
+                const daysDiff = (new Date() - date) / (1000 * 60 * 60 * 24);
+                if (daysDiff > 30) { // Keep last 30 days
+                    keysToRemove.push(key);
+                }
+            }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
     }
 
-    // Add auto-formatting to amount inputs
-    amountInput.addEventListener('input', () => autoFormatRupiahInput(amountInput));
-    quickAddInput.addEventListener('input', () => autoFormatRupiahInput(quickAddInput));
-    fixedDailyInput.addEventListener('input', () => autoFormatRupiahInput(fixedDailyInput));
-    carryoverInput.addEventListener('input', () => autoFormatRupiahInput(carryoverInput));
-
-    // ---------------- Initialization ----------------
+    // ---------------- Init ----------------
     function init() {
         balance = loadNumber(LS_BALANCE, 0);
         history = loadJSON(LS_HISTORY, []);
         lastUndo = loadJSON(LS_LAST_UNDO, null);
-        carryover = loadNumber(LS_CARRYOVER, 0);
-        fixedDailyLimit = loadNumber(LS_DAILY_LIMIT, 0);
         targetDays = loadNumber(LS_TARGET_DAYS, 0);
-        targetModeValue = localStorage.getItem(LS_TARGET_MODE) || 'days';
-        targetStartRaw = localStorage.getItem(LS_TARGET_START) || null;
+        targetStartRaw = localStorage.getItem(LS_TARGET_START);
+        startingBalance = loadNumber(LS_STARTING_BALANCE, 0);
+        carryover = loadNumber(LS_CARRYOVER, 0);
+        lastCheckDate = localStorage.getItem(LS_LAST_CHECK_DATE);
+        todayBudget = loadNumber(LS_TODAY_BUDGET, 0);
 
-        targetDaysInput.value = targetDays > 0 ? targetDays : '';
-        targetModeSelect.value = targetModeValue;
-        fixedDailyInput.value = fixedDailyLimit > 0 ? formatRupiah(fixedDailyLimit) : '';
-        carryoverInput.value = carryover !== 0 ? formatRupiah(carryover) : '';
-
+        cleanupOldDailyLimits();
+        checkNewDay();
         updateUI();
+        initEventListeners();
     }
 
-    // ---------------- Actions ----------------
+    // ---------------- Check if new day and handle carryover ----------------
+    function checkNewDay() {
+        const today = nowKey();
+        
+        // If we have a last check date and it's different from today
+        if (lastCheckDate && lastCheckDate !== today && targetDays > 0 && targetStartRaw) {
+            // Calculate yesterday's spending
+            const yesterdaySpent = history.filter(h => h.dateKey === lastCheckDate && h.type === 'Expense').reduce((s,h)=>s+h.amount, 0);
+            const yesterdayLimit = loadNumber('dailyLimit_' + lastCheckDate, 0);
+            
+            // If overspent yesterday, add to carryover
+            if (yesterdaySpent > yesterdayLimit && yesterdayLimit > 0) {
+                const overspent = yesterdaySpent - yesterdayLimit;
+                carryover += overspent;
+                saveNumber(LS_CARRYOVER, carryover);
+                
+                // Add a log entry for the carryover
+                const log = {
+                    id: Date.now(),
+                    type: 'Carryover',
+                    amount: overspent,
+                    note: `Overspent Rp ${formatRupiah(overspent)} on ${lastCheckDate}`,
+                    dateKey: today,
+                    fullDate: new Date().toLocaleString('id-ID')
+                };
+                history.push(log);
+            }
+            
+            // Calculate TODAY's budget (only once when new day starts)
+            const remainingDays = getRemainingDays();
+            if (remainingDays > 0) {
+                const baseBudget = Math.floor(balance / remainingDays);
+                todayBudget = Math.max(0, baseBudget - carryover);
+                saveNumber(LS_TODAY_BUDGET, todayBudget);
+                saveNumber('dailyLimit_' + today, todayBudget);
+            }
+        } else if (!lastCheckDate && targetDays > 0 && targetStartRaw) {
+            // First time setting up budget for today
+            const remainingDays = getRemainingDays();
+            if (remainingDays > 0) {
+                const baseBudget = Math.floor(balance / remainingDays);
+                todayBudget = Math.max(0, baseBudget - carryover);
+                saveNumber(LS_TODAY_BUDGET, todayBudget);
+                saveNumber('dailyLimit_' + today, todayBudget);
+            }
+        }
+        
+        // Update last check date
+        lastCheckDate = today;
+        localStorage.setItem(LS_LAST_CHECK_DATE, today);
+    }
+
+    // ---------------- Budget System ----------------
+    function getRemainingDays() {
+        if (!targetStartRaw || targetDays <= 0) return 0;
+        const start = new Date(targetStartRaw);
+        const end = new Date(start);
+        end.setDate(start.getDate() + targetDays);
+        const now = new Date();
+        const diff = end - now;
+        const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+        return Math.max(0, daysLeft);
+    }
+
+    function getCurrentDayNumber() {
+        if (!targetStartRaw) return 1;
+        const start = new Date(targetStartRaw);
+        const now = new Date();
+        const diff = now - start;
+        const dayNum = Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+        return Math.max(1, dayNum);
+    }
+
+    function calculateSmartDailyBudget() {
+        // Return today's fixed budget that was calculated at start of day
+        return todayBudget;
+    }
+
+    // ---------------- Transaction Handling ----------------
     function addTransaction(type) {
-        const rawAmt = amountInput.value.trim();
-        if (!rawAmt) { alert('Please enter an amount'); return; }
-        const amt = parseRupiah(rawAmt);
-        if (amt <= 0) { alert('Amount must be positive'); return; }
-        const note = noteInput.value.trim();
+        const amountStr = document.getElementById('amount').value.trim();
+        const noteStr = document.getElementById('note').value.trim();
+        if (!amountStr) return alert('Please enter an amount');
+        
+        const amount = parseAmount(amountStr);
+        
+        // AUDIT FIX: Better validation - reject zero or negative
+        if (amount <= 0 || isNaN(amount)) {
+            alert('Amount must be a positive number');
+            return;
+        }
 
-        const entry = {
-            id: Date.now(),
-            type,
-            amount: amt,
-            note,
-            dateKey: nowKey(),
-            fullDate: nowDateTime(),
-            timestamp: new Date().toISOString()
+        const todayKey = nowKey();
+        
+        // Store current state for undo
+        lastUndo = {
+            balance: balance,
+            history: JSON.parse(JSON.stringify(history)),
+            carryover: carryover,
+            todayBudget: todayBudget
         };
+        saveJSON(LS_LAST_UNDO, lastUndo);
 
-        lastUndo = { balance, history: [...history] };
-        history.push(entry);
-        if (type === 'Income') balance += amt;
-        else if (type === 'Expense') balance -= amt;
+        if (type === 'Income') {
+            balance += amount;
+        } else if (type === 'Expense') {
+            balance -= amount;
+            
+            // Check for overspending when budget system is active
+            if (targetDays > 0 && targetStartRaw && todayBudget > 0) {
+                const spentToday = history.filter(h => h.dateKey === todayKey && h.type === 'Expense').reduce((s,h)=>s+h.amount, 0) + amount;
+                
+                // Only warn about overspending, don't adjust the daily budget
+                if (spentToday > todayBudget) {
+                    const overspent = spentToday - todayBudget;
+                    alert(`⚠️ WARNING: You've overspent your daily limit by Rp ${formatRupiah(overspent)}!\n\nThis will be added to tomorrow's carryover, reducing your next day's budget.`);
+                }
+            }
+        }
 
-        amountInput.value = '';
-        noteInput.value = '';
+        const log = {
+            id: Date.now(),
+            type: type,
+            amount: amount,
+            note: noteStr || (type === 'Expense' ? 'Expense' : 'Income'),
+            dateKey: todayKey,
+            fullDate: new Date().toLocaleString('id-ID')
+        };
+        
+        history.push(log);
+        document.getElementById('amount').value = '';
+        document.getElementById('note').value = '';
         persistAll();
         updateUI();
     }
 
     function undoLast() {
-        if (!lastUndo) { alert('Nothing to undo'); return; }
-        balance = lastUndo.balance;
-        history = lastUndo.history;
-        lastUndo = null;
+        const saved = loadJSON(LS_LAST_UNDO, null);
+        if (!saved) return alert('Nothing to undo');
+        
+        balance = saved.balance;
+        history = saved.history;
+        carryover = saved.carryover || 0;
+        todayBudget = saved.todayBudget || 0;
+        
+        removeItem(LS_LAST_UNDO);
         persistAll();
         updateUI();
-        alert('Last transaction undone!');
+        alert('Last transaction undone');
     }
 
-    function takeSnapshot() {
-        const note = prompt('Note for snapshot (optional):') || '';
-        const entry = {
-            id: Date.now(),
-            type: 'Snapshot',
-            amount: balance,
-            note,
-            dateKey: nowKey(),
-            fullDate: nowDateTime(),
-            timestamp: new Date().toISOString()
-        };
-        history.push(entry);
-        persistAll();
-        updateUI();
-        alert('Snapshot saved!');
-    }
+    function initEventListeners() {
+        document.getElementById('btnIncome').addEventListener('click', () => addTransaction('Income'));
+        document.getElementById('btnExpense').addEventListener('click', () => addTransaction('Expense'));
+        document.getElementById('btnUndo').addEventListener('click', undoLast);
 
-    function quickAddBalance() {
-        quickAddModal.classList.add('active');
-    }
-    
-    function confirmQuickAddFn() {
-        const val = quickAddInput.value.trim();
-        if (!val) { alert('Enter a value'); return; }
-        const newBal = parseRupiah(val);
-        if (newBal < 0) { alert('Must be non-negative'); return; }
-        
-        const difference = newBal - balance;
-        
-        if (difference !== 0) {
-            const entry = {
-                id: Date.now(),
-                type: difference > 0 ? 'Income' : 'Expense',
-                amount: Math.abs(difference),
-                note: difference > 0 ? 'Balance Adjustment (Quick Add)' : 'Balance Adjustment (Quick Subtract)',
-                dateKey: nowKey(),
-                fullDate: nowDateTime(),
-                timestamp: new Date().toISOString()
-            };
+        // AUDIT FIX: Auto-format amount input with proper decimal handling
+        const amountInput = document.getElementById('amount');
+        amountInput.addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\./g, ''); // Remove existing dots
             
-            history.push(entry);
-            balance = newBal;
-        }
-        
-        persistAll();
-        updateUI();
-        quickAddModal.classList.remove('active');
-        quickAddInput.value = '';
-        alert('Balance updated!');
-    }
-    
-    function cancelQuickAddFn() {
-        quickAddModal.classList.remove('active');
-        quickAddInput.value = '';
-    }
-
-    function saveTargetDaysFn() {
-        const val = targetDaysInput.value.trim();
-        targetDays = (val && !isNaN(val)) ? Math.max(0, parseInt(val,10)) : 0;
-        targetModeValue = targetModeSelect.value;
-        initTargetStart();
-        persistAll();
-        updateUI();
-        alert('Target saved!');
-    }
-
-    function saveFixedDailyLimitFn() {
-        const val = fixedDailyInput.value.trim();
-        fixedDailyLimit = parseRupiah(val);
-        persistAll();
-        updateUI();
-        alert('Fixed daily limit saved!');
-    }
-
-    function saveCarryoverFn() {
-        const val = carryoverInput.value.trim();
-        carryover = parseRupiah(val);
-        persistAll();
-        updateUI();
-        alert('Carryover saved!');
-    }
-
-    function exportCSV() {
-        if (!history.length) { alert('No data to export'); return; }
-        let csv = 'Type,Amount,Note,Date\n';
-        history.forEach(h => {
-            const escaped = (h.note || '').replace(/"/g, '""');
-            csv += `${h.type},${h.amount},"${escaped}",${h.fullDate}\n`;
+            // AUDIT FIX: Reject negative values
+            if (value.startsWith('-')) {
+                value = value.substring(1);
+            }
+            
+            // AUDIT FIX: Only allow digits
+            value = value.replace(/[^\d]/g, '');
+            
+            if (value && !isNaN(value)) {
+                // Format with thousand separators using the cached formatter
+                const num = parseInt(value);
+                e.target.value = rupiahFormatter.format(num);
+            }
         });
-        downloadFile('wallet-export.csv', csv, 'text/csv');
-    }
 
-    function exportJSON() {
-        const data = { balance, history, carryover, fixedDailyLimit, targetDays, targetModeValue, targetStartRaw };
-        const json = JSON.stringify(data, null, 2);
-        downloadFile('wallet-export.json', json, 'application/json');
-    }
-
-    function importJSON() {
-        importFile.click();
-    }
-
-    function handleImport(e) {
-        const file = e.target.files[0];
-        if (!file) {
-            importFile.value = '';
-            return;
-        }
-        
-        const reader = new FileReader();
-        reader.onload = ev => {
-            try {
-                const data = JSON.parse(ev.target.result);
-                
-                if (Array.isArray(data)) {
-                    console.log('Detected history-only format');
-                    
-                    let calculatedBalance = 0;
-                    data.forEach(entry => {
-                        if (entry.type === 'Income') {
-                            calculatedBalance += entry.amount;
-                        } else if (entry.type === 'Expense') {
-                            calculatedBalance -= entry.amount;
-                        }
-                    });
-                    
-                    const shouldMerge = confirm(
-                        '📥 Import History\n\n' +
-                        'Found ' + data.length + ' transaction(s)\n' +
-                        'Calculated Balance: Rp ' + formatRupiah(calculatedBalance) + '\n\n' +
-                        'Click OK to MERGE with existing data\n' +
-                        'Click Cancel to REPLACE all data'
-                    );
-                    
-                    if (shouldMerge) {
-                        history = [...history, ...data];
-                        balance += calculatedBalance;
-                    } else {
-                        history = data;
-                        balance = calculatedBalance;
-                        carryover = 0;
-                        fixedDailyLimit = 0;
-                        targetDays = 0;
-                        targetModeValue = 'days';
-                        targetStartRaw = null;
-                    }
-                    
-                } else if (typeof data === 'object' && data !== null) {
-                    console.log('Detected full export format');
-                    
-                    balance = typeof data.balance === 'number' ? data.balance : 0;
-                    history = Array.isArray(data.history) ? data.history : [];
-                    carryover = typeof data.carryover === 'number' ? data.carryover : 0;
-                    fixedDailyLimit = typeof data.fixedDailyLimit === 'number' ? data.fixedDailyLimit : 0;
-                    targetDays = typeof data.targetDays === 'number' ? data.targetDays : 0;
-                    targetModeValue = data.targetModeValue || 'days';
-                    targetStartRaw = data.targetStartRaw || null;
-                    
+        // AUDIT FIX: Better keyboard handling - Enter triggers expense, Ctrl+Enter triggers income
+        document.getElementById('amount').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.ctrlKey || e.metaKey) {
+                    document.getElementById('btnIncome').click();
                 } else {
-                    throw new Error('Invalid data format - expected array or object');
+                    document.getElementById('btnExpense').click();
                 }
-                
-                targetDaysInput.value = targetDays > 0 ? targetDays : '';
-                targetModeSelect.value = targetModeValue;
-                fixedDailyInput.value = fixedDailyLimit > 0 ? formatRupiah(fixedDailyLimit) : '';
-                carryoverInput.value = carryover !== 0 ? formatRupiah(carryover) : '';
-                
+            }
+        });
+
+        document.getElementById('note').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.ctrlKey || e.metaKey) {
+                    document.getElementById('btnIncome').click();
+                } else {
+                    document.getElementById('btnExpense').click();
+                }
+            }
+        });
+
+        historyFilter.addEventListener('change', updateUI);
+        searchNote.addEventListener('input', updateUI);
+
+        document.getElementById('btnExport').addEventListener('click', exportCSV);
+        document.getElementById('btnExportJSON').addEventListener('click', exportJSON);
+        document.getElementById('btnImport').addEventListener('click', () => document.getElementById('importFile').click());
+        document.getElementById('importFile').addEventListener('change', importJSON);
+
+        // AUDIT FIX: Better validation for target days
+        document.getElementById('saveTargetBtn').addEventListener('click', () => {
+            const daysVal = document.getElementById('targetDays').value.trim();
+            const days = Number(daysVal);
+            
+            // AUDIT FIX: Strict integer validation
+            if (!Number.isInteger(days) || days <= 0) {
+                alert('Enter a valid integer number of days (greater than 0)');
+                return;
+            }
+            
+            targetDays = days;
+            targetStartRaw = new Date().toISOString();
+            startingBalance = balance;
+            carryover = 0;
+            
+            // Calculate today's budget
+            const remainingDays = getRemainingDays();
+            if (remainingDays > 0) {
+                todayBudget = Math.floor(balance / remainingDays);
+            } else {
+                todayBudget = 0;
+            }
+            
+            const today = nowKey();
+            saveNumber(LS_TARGET_DAYS, targetDays);
+            localStorage.setItem(LS_TARGET_START, targetStartRaw);
+            saveNumber(LS_STARTING_BALANCE, startingBalance);
+            saveNumber(LS_CARRYOVER, carryover);
+            saveNumber(LS_TODAY_BUDGET, todayBudget);
+            saveNumber('dailyLimit_' + today, todayBudget);
+            localStorage.setItem(LS_LAST_CHECK_DATE, today);
+            lastCheckDate = today;
+            
+            document.getElementById('resetTargetBtn').style.display = 'block';
+            updateUI();
+            alert(`Budget started! Your money should last ${days} days.\nToday's budget: Rp ${formatRupiah(todayBudget)}`);
+        });
+
+        document.getElementById('resetTargetBtn').addEventListener('click', () => {
+            if (!confirm('Reset budget system? This will clear your target days and start date.')) return;
+            
+            targetDays = 0;
+            targetStartRaw = null;
+            startingBalance = 0;
+            carryover = 0;
+            todayBudget = 0;
+            
+            removeItem(LS_TARGET_DAYS);
+            removeItem(LS_TARGET_START);
+            removeItem(LS_STARTING_BALANCE);
+            removeItem(LS_CARRYOVER);
+            removeItem(LS_LAST_CHECK_DATE);
+            removeItem(LS_TODAY_BUDGET);
+            
+            document.getElementById('resetTargetBtn').style.display = 'none';
+            document.getElementById('targetDays').value = '';
+            updateUI();
+        });
+
+        document.getElementById('snapshotBtn').addEventListener('click', () => {
+            const snapAmount = balance;
+            if (snapAmount === 0) return alert('Balance is zero, nothing to snapshot');
+            
+            lastUndo = {
+                balance: 0,
+                history: JSON.parse(JSON.stringify(history)),
+                carryover: carryover,
+                todayBudget: todayBudget
+            };
+            saveJSON(LS_LAST_UNDO, lastUndo);
+
+            const log = {
+                id: Date.now(),
+                type: 'Snapshot',
+                amount: snapAmount,
+                note: 'Balance snapshot',
+                dateKey: nowKey(),
+                fullDate: new Date().toLocaleString('id-ID')
+            };
+            history.push(log);
+            balance = 0;
+            persistAll();
+            updateUI();
+            alert(`Snapshot taken: Rp ${formatRupiah(snapAmount)} saved. Balance reset to 0.`);
+        });
+
+        document.getElementById('quickAddBtn').addEventListener('click', () => {
+            const input = prompt('Enter amount to add to balance:');
+            if (!input) return;
+            
+            const amount = parseAmount(input);
+            if (amount <= 0) return alert('Amount must be positive');
+
+            lastUndo = {
+                balance: balance,
+                history: JSON.parse(JSON.stringify(history)),
+                carryover: carryover,
+                todayBudget: todayBudget
+            };
+            saveJSON(LS_LAST_UNDO, lastUndo);
+
+            balance += amount;
+            const log = {
+                id: Date.now(),
+                type: 'Income',
+                amount: amount,
+                note: 'Quick add',
+                dateKey: nowKey(),
+                fullDate: new Date().toLocaleString('id-ID')
+            };
+            history.push(log);
+            persistAll();
+            updateUI();
+        });
+
+        document.getElementById('btnClearAll').addEventListener('click', () => {
+            if (!confirm('⚠️ Clear ALL data? This cannot be undone!')) return;
+            if (!confirm('Are you absolutely sure? All transactions will be deleted!')) return;
+            
+            localStorage.clear();
+            location.reload();
+        });
+
+        // AUDIT FIX: Modal focus management
+        document.getElementById('btnEditBalance').addEventListener('click', () => {
+            editBalanceModal.classList.add('active');
+            const input = document.getElementById('manualBalanceInput');
+            input.value = balance;
+            input.focus(); // AUDIT FIX: Set focus to input
+        });
+
+        // AUDIT FIX: Better validation for manual balance
+        document.getElementById('confirmManualBalance').addEventListener('click', () => {
+            const inputVal = document.getElementById('manualBalanceInput').value.trim();
+            const newBalance = Number(inputVal);
+            
+            // AUDIT FIX: Strict validation
+            if (isNaN(newBalance) || inputVal === '') {
+                alert('Please enter a valid number');
+                return;
+            }
+
+            lastUndo = {
+                balance: balance,
+                history: JSON.parse(JSON.stringify(history)),
+                carryover: carryover,
+                todayBudget: todayBudget
+            };
+            saveJSON(LS_LAST_UNDO, lastUndo);
+
+            const diff = newBalance - balance;
+            balance = newBalance;
+            
+            if (diff !== 0) {
+                const log = {
+                    id: Date.now(),
+                    type: diff > 0 ? 'Income' : 'Expense',
+                    amount: Math.abs(diff),
+                    note: 'Manual balance adjustment',
+                    dateKey: nowKey(),
+                    fullDate: new Date().toLocaleString('id-ID')
+                };
+                history.push(log);
                 persistAll();
                 updateUI();
-                alert('✅ Data imported successfully!\n\nImported:\n- Balance: Rp ' + formatRupiah(balance) + '\n- ' + history.length + ' transaction(s)');
-            } catch (err) {
-                alert('❌ Import failed: ' + (err.message || 'Invalid JSON file'));
-                console.error('Import error:', err);
-            } finally {
-                importFile.value = '';
             }
-        };
-        
-        reader.onerror = () => {
-            alert('❌ Failed to read file');
-            importFile.value = '';
-        };
-        
-        reader.readAsText(file);
-    }
+            editBalanceModal.classList.remove('active');
+        });
 
-    function clearAllData() {
-        if (!confirm('Clear all data? This cannot be undone.')) return;
-        localStorage.clear();
-        location.reload();
-    }
+        document.getElementById('cancelManualBalance').addEventListener('click', () => {
+            editBalanceModal.classList.remove('active');
+        });
 
-    function importReplace() {
-        if (!confirm('This will replace ALL your data. Continue?')) return;
-        importJSON();
-    }
-
-    function downloadFile(filename, content, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-    }
-
-    // ---------------- Event Listeners ----------------
-    btnIncome.addEventListener('click', () => addTransaction('Income'));
-    btnExpense.addEventListener('click', () => addTransaction('Expense'));
-    btnUndo.addEventListener('click', undoLast);
-    snapshotBtn.addEventListener('click', takeSnapshot);
-    quickAddBtn.addEventListener('click', quickAddBalance);
-    confirmQuickAdd.addEventListener('click', confirmQuickAddFn);
-    cancelQuickAdd.addEventListener('click', cancelQuickAddFn);
-    saveTargetBtn.addEventListener('click', saveTargetDaysFn);
-    saveFixedDailyBtn.addEventListener('click', saveFixedDailyLimitFn);
-    saveCarryoverBtn.addEventListener('click', saveCarryoverFn);
-    btnExport.addEventListener('click', exportCSV);
-    btnExportJSON.addEventListener('click', exportJSON);
-    btnImport.addEventListener('click', importJSON);
-    importFile.addEventListener('change', handleImport);
-    btnClearAll.addEventListener('click', clearAllData);
-    btnImportReplace.addEventListener('click', importReplace);
-
-    historyFilter.addEventListener('change', updateUI);
-    searchNote.addEventListener('input', updateUI);
-    btnClearFilters.addEventListener('click', () => {
-        historyFilter.value = 'all';
-        searchNote.value = '';
-        updateUI();
-    });
-
-    function initTargetStart() {
-        if (targetStartRaw) return;
-        const todayIso = new Date().toISOString();
-        targetStartRaw = todayIso;
-        localStorage.setItem(LS_TARGET_START, todayIso);
+        // AUDIT FIX: ESC key closes modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && editBalanceModal.classList.contains('active')) {
+                editBalanceModal.classList.remove('active');
+            }
+        });
     }
 
     // ---------------- Persistence ----------------
@@ -640,56 +729,7 @@
         saveJSON(LS_HISTORY, history);
         saveJSON(LS_LAST_UNDO, lastUndo);
         saveNumber(LS_CARRYOVER, carryover);
-        saveNumber(LS_DAILY_LIMIT, fixedDailyLimit);
-        localStorage.setItem(LS_TARGET_DAYS, String(targetDays));
-        localStorage.setItem(LS_TARGET_MODE, targetModeValue);
-        if (targetStartRaw) localStorage.setItem(LS_TARGET_START, targetStartRaw);
-    }
-
-    // ---------------- Adaptive Targeting / Recalculation ----------------
-    function computeAverageDailyExpenseSinceStart() {
-        if (!targetStartRaw) return null;
-        const startDate = isoToDate(targetStartRaw);
-        if (!startDate) return null;
-        const endDate = new Date();
-        const daysElapsed = Math.max(1, daysBetween(startDate, endDate));
-        
-        const normalizedStart = normalizeToMidnight(startDate);
-        
-        const totalExpenses = history.reduce((sum, h) => {
-            if (h.type !== 'Expense') return sum;
-            const hd = isoToDate(h.timestamp);
-            if (!hd) return sum;
-            const normalizedHd = normalizeToMidnight(hd);
-            if (normalizedHd >= normalizedStart) {
-                return sum + h.amount;
-            }
-            return sum;
-        }, 0);
-        
-        if (totalExpenses === 0) return null;
-        return totalExpenses / daysElapsed;
-    }
-
-    function computeEstimatedRemainingDays() {
-        if (balance <= 0) return 0;
-        const avg = computeAverageDailyExpenseSinceStart();
-        if (avg && avg > 0) {
-            const estimate = Math.floor(balance / avg);
-            return Math.max(0, estimate);
-        }
-        if (targetDays > 0) {
-            const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
-            const originalDaily = Math.max(1, Math.floor(balance / Math.max(1, divisor)));
-            return Math.max(0, Math.floor(balance / Math.max(1, originalDaily)));
-        }
-        return Math.max(0, Math.floor(balance / 1));
-    }
-
-    function getAdaptiveDailyBudget() {
-        const rem = computeEstimatedRemainingDays();
-        if (rem <= 0) return Math.max(0, Math.floor(balance));
-        return Math.max(1, Math.floor(balance / Math.max(1, rem)));
+        saveNumber(LS_TODAY_BUDGET, todayBudget);
     }
 
     // ---------------- UI Update ----------------
@@ -698,41 +738,56 @@
         entryCount.innerText = history.length;
         lastChange.innerText = history.length ? history[history.length-1].fullDate + ' • ' + (history[history.length-1].note||'') : '—';
         canUndoEl.innerText = loadJSON(LS_LAST_UNDO, null) ? 'Yes' : 'No';
-        carryoverEl.innerText = `Rp ${formatRupiah(carryover)}`;
-        dailyLimitDisplay.innerText = fixedDailyLimit > 0 ? `Rp ${formatRupiah(fixedDailyLimit)}` : '—';
 
-        if (fixedDailyLimit > 0 || targetDays > 0 || targetStartRaw) {
+        if (targetDays > 0 && targetStartRaw) {
             targetDisplay.style.display = 'block';
-            origTargetEl.innerText = targetDays > 0 ? `${targetDays} ${targetModeValue === 'monthly' ? 'month(s)' : 'day(s)'}` : '—';
-            targetStartDateEl.innerText = targetStartRaw ? (new Date(targetStartRaw).toLocaleDateString('id-ID')) : '—';
-
-            // CRITICAL FIX: Use fixed daily limit if set, otherwise use adaptive budget
-            let dailyBudget;
-            if (fixedDailyLimit > 0) {
-                // Use the fixed daily limit (immutable)
-                dailyBudget = fixedDailyLimit;
-            } else {
-                // Use adaptive budget calculation
-                dailyBudget = getAdaptiveDailyBudget();
-            }
             
-            const availableBudget = dailyBudget + carryover;
-            dailyBudgetEl.innerText = `Rp ${formatRupiah(availableBudget)}`;
+            const remainingDays = getRemainingDays();
+            const dailyBudget = calculateSmartDailyBudget();
+            const currentDay = getCurrentDayNumber();
+            
+            daysRemainingEl.innerText = remainingDays;
+            dailyBudgetEl.innerText = `Rp ${formatRupiah(dailyBudget)}`;
+            origTargetEl.innerText = targetDays;
+            targetStartDateEl.innerText = new Date(targetStartRaw).toLocaleDateString('id-ID');
+            startingBalanceEl.innerText = `Rp ${formatRupiah(startingBalance)}`;
+            currentDayEl.innerText = currentDay;
+
+            // Show carryover if exists
+            if (carryover > 0) {
+                carryoverInfoEl.style.display = 'block';
+                carryoverAmountEl.innerText = formatRupiah(carryover);
+            } else {
+                carryoverInfoEl.style.display = 'none';
+            }
 
             const todayKey = nowKey();
             const spentToday = history.filter(h => h.dateKey === todayKey && h.type === 'Expense').reduce((s,h)=>s+h.amount, 0);
             spentTodayEl.innerText = `Rp ${formatRupiah(spentToday)}`;
-            remainingTodayEl.innerText = `Rp ${formatRupiah(Math.max(0, availableBudget - spentToday))}`;
+            
+            const remainingToday = Math.max(0, dailyBudget - spentToday);
+            remainingTodayEl.innerText = `Rp ${formatRupiah(remainingToday)}`;
 
-            let percent = availableBudget > 0 ? (spentToday / availableBudget) * 100 : 0;
+            let percent = dailyBudget > 0 ? (spentToday / dailyBudget) * 100 : 0;
             pBar.style.width = Math.min(percent, 100) + '%';
 
-            if (percent > 100) { pBar.style.background = 'var(--red)'; warningText.innerText = 'OVER LIMIT!'; warningText.style.color = 'var(--red)'; }
-            else if (percent > 80) { pBar.style.background = 'var(--yellow)'; warningText.innerText = 'ALMOST FULL'; warningText.style.color = 'var(--yellow)'; }
-            else { pBar.style.background = 'var(--green)'; warningText.innerText = 'SAFE'; warningText.style.color = 'var(--green)'; }
-
-            const remDays = computeEstimatedRemainingDays();
-            remainingDaysEstimateEl.innerText = (remDays === Infinity || remDays === null) ? '—' : `${remDays} day(s)`;
+            if (remainingDays === 0) {
+                warningText.innerText = 'TARGET PERIOD ENDED - Click Reset to start new budget';
+                warningText.style.color = 'var(--red)';
+                pBar.style.background = 'var(--muted)';
+            } else if (percent > 100) {
+                pBar.style.background = 'var(--red)';
+                warningText.innerText = 'OVER LIMIT! This will carry over to tomorrow.';
+                warningText.style.color = 'var(--red)';
+            } else if (percent > 80) {
+                pBar.style.background = 'var(--yellow)';
+                warningText.innerText = 'ALMOST FULL';
+                warningText.style.color = 'var(--yellow)';
+            } else {
+                pBar.style.background = 'var(--green)';
+                warningText.innerText = 'SAFE';
+                warningText.style.color = 'var(--green)';
+            }
         } else {
             targetDisplay.style.display = 'none';
         }
@@ -750,14 +805,49 @@
         renderHistory(filtered.slice().reverse());
     }
 
+    // AUDIT FIX: Secure history rendering - use textContent instead of innerHTML to prevent XSS
     function renderHistory(list) {
-        historyList.innerHTML = list.slice(0, 200).map(h => {
-            const sign = h.type === 'Expense' ? '-' : (h.type === 'Income' ? '+' : '');
-            const color = h.type === 'Expense' ? 'color:var(--red)' : (h.type === 'Income' ? 'color:var(--green)' : 'color:var(--accent)');
-            return `<li><div><strong>${h.type}</strong><br><div class="note">${h.fullDate} • ${h.note || ''}</div></div>
-                    <div style="${color}; text-align:right; min-width:90px">${sign} Rp ${formatRupiah(h.amount)}
-                    <div style="margin-top:6px"><button class="small-btn" onclick="deleteLog(${h.id})">Delete</button></div></div></li>`;
-        }).join('');
+        historyList.innerHTML = '';  // Clear
+        
+        list.slice(0, 200).forEach(h => {
+            const li = document.createElement('li');
+            
+            // Info section
+            const infoDiv = document.createElement('div');
+            const typeStrong = document.createElement('strong');
+            typeStrong.textContent = h.type; // AUDIT FIX: Use textContent
+            infoDiv.appendChild(typeStrong);
+            infoDiv.appendChild(document.createElement('br'));
+            
+            const noteDiv = document.createElement('div');
+            noteDiv.className = 'note';
+            noteDiv.textContent = `${h.fullDate} • ${h.note || ''}`; // AUDIT FIX: textContent escapes input
+            infoDiv.appendChild(noteDiv);
+            li.appendChild(infoDiv);
+
+            // Value section
+            const valueDiv = document.createElement('div');
+            const color = h.type === 'Expense' ? 'var(--red)' : 
+                         (h.type === 'Income' || h.type === 'Snapshot' ? 'var(--green)' : 
+                         (h.type === 'Carryover' ? 'var(--yellow)' : 'var(--accent)'));
+            valueDiv.style.cssText = `text-align:right; min-width:90px; color:${color}`;
+            
+            const sign = h.type === 'Expense' ? '-' : (h.type === 'Income' || h.type === 'Snapshot' ? '+' : '');
+            valueDiv.textContent = `${sign} Rp ${formatRupiah(h.amount)}`; // AUDIT FIX: Use textContent
+            
+            const btnDiv = document.createElement('div');
+            btnDiv.style.marginTop = '6px';
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button'; // AUDIT FIX: Explicit button type
+            deleteBtn.className = 'small-btn';
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.addEventListener('click', () => deleteLog(h.id));
+            btnDiv.appendChild(deleteBtn);
+            valueDiv.appendChild(btnDiv);
+
+            li.appendChild(valueDiv);
+            historyList.appendChild(li);
+        });
     }
 
     window.deleteLog = function(id) {
@@ -766,10 +856,17 @@
         if (idx > -1) {
             const deletedTransaction = history[idx];
 
+            // AUDIT FIX: Correct snapshot deletion logic
+            // Snapshot logs balance that was saved, so deleting it should ADD that amount back
             if (deletedTransaction.type === 'Income') {
                 balance -= deletedTransaction.amount;
+            } else if (deletedTransaction.type === 'Snapshot') {
+                // AUDIT FIX: Snapshot is like an expense (balance was zeroed), so deleting adds it back
+                balance += deletedTransaction.amount;
             } else if (deletedTransaction.type === 'Expense') {
                 balance += deletedTransaction.amount;
+            } else if (deletedTransaction.type === 'Carryover') {
+                carryover -= deletedTransaction.amount;
             }
 
             history.splice(idx, 1);
@@ -779,6 +876,72 @@
         }
     };
 
+    // ---------------- Export/Import ----------------
+    function exportCSV() {
+        let csv = 'Type,Amount,Note,Date,Time\n';
+        history.forEach(h => {
+            const [date, time] = h.fullDate.split(', ');
+            // AUDIT FIX: Properly escape CSV fields
+            const escapedNote = (h.note || '').replace(/"/g, '""');
+            csv += `${h.type},"${h.amount}","${escapedNote}","${date}","${time}"\n`;
+        });
+        downloadFile(csv, 'wallet-export.csv', 'text/csv');
+    }
+
+    function exportJSON() {
+        const data = { balance, history, targetDays, targetStartRaw, startingBalance, carryover, lastCheckDate, todayBudget };
+        downloadFile(JSON.stringify(data, null, 2), 'wallet-export.json', 'application/json');
+    }
+
+    // AUDIT FIX: Validate imported data
+    function importJSON(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                
+                // AUDIT FIX: Validate data structure
+                if (data.balance !== undefined && typeof data.balance === 'number') balance = data.balance;
+                if (Array.isArray(data.history)) {
+                    // Validate each history item has expected properties
+                    const validHistory = data.history.every(h => 
+                        h && typeof h === 'object' && 
+                        typeof h.id === 'number' && 
+                        typeof h.type === 'string' && 
+                        typeof h.amount === 'number'
+                    );
+                    if (validHistory) history = data.history;
+                }
+                if (data.targetDays !== undefined && typeof data.targetDays === 'number') targetDays = data.targetDays;
+                if (data.targetStartRaw) targetStartRaw = data.targetStartRaw;
+                if (data.startingBalance !== undefined && typeof data.startingBalance === 'number') startingBalance = data.startingBalance;
+                if (data.carryover !== undefined && typeof data.carryover === 'number') carryover = data.carryover;
+                if (data.lastCheckDate) lastCheckDate = data.lastCheckDate;
+                if (data.todayBudget !== undefined && typeof data.todayBudget === 'number') todayBudget = data.todayBudget;
+                
+                persistAll();
+                updateUI();
+                alert('Data imported successfully!');
+            } catch (err) {
+                alert('Invalid JSON file or corrupted data');
+                console.error('Import error:', err);
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
     document.getElementById('floatingToggleAdmin').addEventListener('click', () => {
         const admin = document.getElementById('adminSection');
         admin.style.display = admin.style.display === 'block' ? 'none' : 'block';
@@ -786,7 +949,14 @@
 
     init();
     setInterval(() => { persistAll(); }, 15000);
-    window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undoLast(); } });
+    
+    // AUDIT FIX: Better keyboard shortcut handling
+    window.addEventListener('keydown', (e) => { 
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !editBalanceModal.classList.contains('active')) { 
+            e.preventDefault(); 
+            undoLast(); 
+        } 
+    });
 })();
 </script>
 </body>
