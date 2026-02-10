@@ -143,8 +143,8 @@
             <input type="text" id="note" placeholder="Description (optional)" autocomplete="off" />
         </div>
         <div style="display:flex; gap:10px; margin-top:10px;">
-            <button class="green" id="btnIncome">Income</button>
-            <button class="red" id="btnExpense">Expense</button>
+            <button class="small-btn green" id="btnIncome">Income</button>
+            <button class="small-btn red" id="btnExpense">Expense</button>
             <button class="small-btn blue" id="btnUndo" title="Undo last transaction">Undo</button>
         </div>
 
@@ -157,409 +157,373 @@
     </div>
 
     <div class="card">
-        <h3>Activity Log</h3>
+        <h3>History</h3>
         <div class="filter-row">
-            <select id="filterType">
+            <select id="historyFilter" class="small">
                 <option value="all">All</option>
                 <option value="Income">Income</option>
                 <option value="Expense">Expense</option>
                 <option value="Snapshot">Snapshot</option>
             </select>
-            <input type="date" id="filterFrom" />
-            <input type="date" id="filterTo" />
-            <button class="small-btn" id="btnApplyFilter">Apply</button>
-            <button class="small-btn" id="btnClearFilter">Clear</button>
+            <input type="text" id="searchNote" placeholder="Search description..." class="small" style="flex:1" />
+            <button class="small-btn" id="btnClearFilters">Clear</button>
         </div>
         <ul id="historyList"></ul>
     </div>
 
-    <div class="card" id="adminSection" style="display:none;">
-        <h3>Admin Panel <span class="muted">(unlocked)</span></h3>
-        <div class="muted">Reset balance (type number with separators allowed)</div>
-        <div style="display:flex; gap:8px; margin-top:8px;">
-            <input id="balanceInput" placeholder="New Balance value"/>
-            <button class="blue" id="setBalanceBtn">Overwrite</button>
+    <div class="card" id="adminSection" style="display:none">
+        <h3 style="color:var(--yellow)">Admin Panel</h3>
+        <div class="danger">
+            <strong>⚠️ Danger Zone:</strong>
+            <p style="margin:4px 0 10px">Actions here cannot be easily undone.</p>
+            <button class="small-btn red" id="btnClearAll" style="margin-right:6px">Clear All Data</button>
+            <button class="small-btn" id="btnImportReplace">Import & Replace All</button>
         </div>
-        <div style="margin-top:12px; display:flex; gap:8px;">
-            <button class="small-btn red" id="clearAllBtn">Clear all data</button>
-            <button class="small-btn" id="downloadLogsBtn">Download logs (JSON)</button>
-        </div>
+        <h4 style="margin-top:14px">Set Fixed Daily Limit (Optional)</h4>
+        <p class="muted">This sets an immutable daily spending limit. Overrules target calculations if set. Leave blank or zero to rely only on adaptive targeting.</p>
+        <input type="number" id="fixedDailyInput" placeholder="e.g. 50.000" />
+        <button class="small-btn blue" id="saveFixedDailyBtn" style="width:100%; margin-top:8px">Save Fixed Daily Limit</button>
+        <h4 style="margin-top:14px">Carryover Management</h4>
+        <p class="muted">Manually adjust leftover budget from previous days.</p>
+        <input type="number" id="carryoverInput" placeholder="e.g. 10000" />
+        <button class="small-btn blue" id="saveCarryoverBtn" style="width:100%; margin-top:8px">Set Carryover</button>
+    </div>
+
+    <div class="floating">
+        <button class="small-btn" id="floatingToggleAdmin" style="padding:10px 14px">⚙️ Admin</button>
     </div>
 
 </div>
 
-<div class="modal-overlay" id="paydayModal">
+<div class="modal-overlay" id="quickAddModal">
     <div class="modal-content">
-        <h3>New Payday Detected! 💰</h3>
-        <p class="muted">You've added a significant balance. How many days should this last?</p>
-        <input type="number" id="paydayDays" placeholder="e.g. 14" min="1" />
-        <select id="paydayMode">
-            <option value="days">Days</option>
-            <option value="monthly">Months</option>
-        </select>
-        <button class="blue" id="paydayConfirmBtn">Confirm</button>
-        <button class="small-btn" id="paydaySkipBtn">Skip</button>
+        <h3>Quick Add Balance</h3>
+        <p class="muted">Enter a new amount to <strong>set</strong> your total balance directly (not add to it).</p>
+        <input type="number" id="quickAddInput" placeholder="e.g. 1000000" style="margin-top:8px" />
+        <button class="small-btn green" id="confirmQuickAdd">Set Balance</button>
+        <button class="small-btn" id="cancelQuickAdd">Cancel</button>
     </div>
-</div>
-
-<div class="floating" aria-hidden="false">
-    <button id="floatingAdd" class="green small-btn">＋ Add Quick Income</button>
-    <button id="floatingToggleAdmin" class="small-btn">Toggle Admin</button>
 </div>
 
 <script>
-(() => {
-    // Keys
-    const LS_BALANCE = 'dwp_balance_v3';
-    const LS_HISTORY = 'dwp_history_v3';
-    const LS_TARGET_DAYS = 'dwp_target_days_v3';
-    const LS_TARGET_MODE = 'dwp_target_mode_v3';
-    const LS_LAST_UNDO = 'dwp_last_undo_v3';
-    const LS_CARRYOVER = 'dwp_carryover_v3';
-    const LS_DAILY_LIMIT = 'dwp_daily_limit_v3';
-    const LS_LAST_CARRYOVER_DATE = 'dwp_last_carryover_date_v3';
-    const LS_TARGET_START = 'dwp_target_start_v3';
+(function(){
+    "use strict";
 
-    // Elements
-    const balanceText = el('balanceText');
-    const lastChange = el('lastChange');
-    const entryCount = el('entryCount');
-    const canUndoEl = el('canUndo');
-    const carryoverEl = el('carryover');
-    const dailyLimitDisplay = el('dailyLimitDisplay');
-    const amountInput = el('amount');
-    const noteInput = el('note');
-    const btnIncome = el('btnIncome');
-    const btnExpense = el('btnExpense');
-    const btnUndo = el('btnUndo');
-    const historyList = el('historyList');
-    const targetDaysInput = el('targetDays');
-    const targetMode = el('targetMode');
-    const targetDisplay = el('targetDisplay');
-    const dailyBudgetEl = el('dailyBudget');
-    const spentTodayEl = el('spentToday');
-    const remainingTodayEl = el('remainingToday');
-    const pBar = el('pBar');
-    const warningText = el('warningText');
-    const snapshotBtn = el('snapshotBtn');
-    const quickAddBtn = el('quickAddBtn');
-    const quickFloating = el('floatingAdd');
-    const btnExport = el('btnExport');
-    const btnExportJSON = el('btnExportJSON');
-    const btnImport = el('btnImport');
-    const importFile = el('importFile');
-    const filterType = el('filterType');
-    const filterFrom = el('filterFrom');
-    const filterTo = el('filterTo');
-    const btnApplyFilter = el('btnApplyFilter');
-    const btnClearFilter = el('btnClearFilter');
-    const setBalanceBtn = el('setBalanceBtn');
-    const balanceInput = el('balanceInput');
-    const clearAllBtn = el('clearAllBtn');
-    const downloadLogsBtn = el('downloadLogsBtn');
-    const saveTargetBtn = el('saveTargetBtn');
-    const paydayModal = el('paydayModal');
-    const paydayDays = el('paydayDays');
-    const paydayMode = el('paydayMode');
-    const paydayConfirmBtn = el('paydayConfirmBtn');
-    const paydaySkipBtn = el('paydaySkipBtn');
+    const LS_BALANCE = 'dailyWalletBalance';
+    const LS_HISTORY = 'dailyWalletHistory';
+    const LS_LAST_UNDO = 'dailyWalletLastUndo';
+    const LS_TARGET_DAYS = 'dailyWalletTargetDays';
+    const LS_TARGET_MODE = 'dailyWalletTargetMode';
+    const LS_TARGET_START = 'dailyWalletTargetStart';
+    const LS_CARRYOVER = 'dailyWalletCarryover';
+    const LS_DAILY_LIMIT = 'dailyWalletDailyLimit';
 
-    // UI fields introduced
-    const origTargetEl = el('origTarget');
-    const remainingDaysEstimateEl = el('remainingDaysEstimate');
-    const targetStartDateEl = el('targetStartDate');
+    let balance = 0;
+    let history = [];
+    let lastUndo = null;
+    let targetDays = 0;
+    let targetModeValue = 'days';
+    let targetStartRaw = null;
+    let carryover = 0;
+    let fixedDailyLimit = 0;
 
-    // State
-    let balance = loadNumber(LS_BALANCE, 0);
-    let history = loadJSON(LS_HISTORY, []);
-    let lastUndo = loadJSON(LS_LAST_UNDO, null);
-    let carryover = loadNumber(LS_CARRYOVER, 0);
-    let targetDays = Number(localStorage.getItem(LS_TARGET_DAYS) || 0);
-    let targetModeValue = localStorage.getItem(LS_TARGET_MODE) || 'days';
-    let fixedDailyLimit = loadNumber(LS_DAILY_LIMIT, 0);
-    let targetStartRaw = localStorage.getItem(LS_TARGET_START) || null;
+    const balanceText = document.getElementById('balanceText');
+    const entryCount = document.getElementById('entryCount');
+    const lastChange = document.getElementById('lastChange');
+    const canUndoEl = document.getElementById('canUndo');
+    const carryoverEl = document.getElementById('carryover');
+    const dailyLimitDisplay = document.getElementById('dailyLimitDisplay');
+    const targetDisplay = document.getElementById('targetDisplay');
+    const dailyBudgetEl = document.getElementById('dailyBudget');
+    const spentTodayEl = document.getElementById('spentToday');
+    const remainingTodayEl = document.getElementById('remainingToday');
+    const origTargetEl = document.getElementById('origTarget');
+    const remainingDaysEstimateEl = document.getElementById('remainingDaysEstimate');
+    const targetStartDateEl = document.getElementById('targetStartDate');
+    const pBar = document.getElementById('pBar');
+    const warningText = document.getElementById('warningText');
+    const historyList = document.getElementById('historyList');
 
-    // Initialize UI
-    targetDaysInput.value = targetDays || '';
-    targetMode.value = targetModeValue;
+    const amountInput = document.getElementById('amount');
+    const noteInput = document.getElementById('note');
+    const btnIncome = document.getElementById('btnIncome');
+    const btnExpense = document.getElementById('btnExpense');
+    const btnUndo = document.getElementById('btnUndo');
+    const btnExport = document.getElementById('btnExport');
+    const btnExportJSON = document.getElementById('btnExportJSON');
+    const btnImport = document.getElementById('btnImport');
+    const importFile = document.getElementById('importFile');
+    const btnClearAll = document.getElementById('btnClearAll');
+    const btnImportReplace = document.getElementById('btnImportReplace');
 
-    // Listeners
-    amountInput.addEventListener('input', onAmountInput);
-    amountInput.addEventListener('keydown', onAmountKeyDown);
-    btnIncome.addEventListener('click', () => addTransaction('Income'));
-    btnExpense.addEventListener('click', () => addTransaction('Expense'));
-    btnUndo.addEventListener('click', undoLast);
-    snapshotBtn.addEventListener('click', takeSnapshot);
-    quickAddBtn.addEventListener('click', quickAddModal);
-    quickFloating.addEventListener('click', quickAddModal);
-    btnExport.addEventListener('click', exportCSV);
-    btnExportJSON.addEventListener('click', () => downloadJSON(history, 'dwp_history.json'));
-    btnImport.addEventListener('click', () => importFile.click());
-    importFile.addEventListener('change', handleImport);
-    btnApplyFilter.addEventListener('click', applyFilter);
-    btnClearFilter.addEventListener('click', clearFilter);
-    setBalanceBtn.addEventListener('click', setBalanceFromAdmin);
-    balanceInput.addEventListener('input', onAdminBalanceInput);
-    clearAllBtn.addEventListener('click', clearAllData);
-    downloadLogsBtn.addEventListener('click', () => downloadJSON(history, 'dwp_history.json'));
-    saveTargetBtn.addEventListener('click', saveTargetDays);
-    paydayConfirmBtn.addEventListener('click', confirmPayday);
-    paydaySkipBtn.addEventListener('click', skipPayday);
+    const snapshotBtn = document.getElementById('snapshotBtn');
+    const quickAddBtn = document.getElementById('quickAddBtn');
+    const quickAddModal = document.getElementById('quickAddModal');
+    const confirmQuickAdd = document.getElementById('confirmQuickAdd');
+    const cancelQuickAdd = document.getElementById('cancelQuickAdd');
+    const quickAddInput = document.getElementById('quickAddInput');
 
-    applyCarryoverIfNewDay();
-    updateUI();
+    const targetDaysInput = document.getElementById('targetDays');
+    const targetModeSelect = document.getElementById('targetMode');
+    const saveTargetBtn = document.getElementById('saveTargetBtn');
+
+    const historyFilter = document.getElementById('historyFilter');
+    const searchNote = document.getElementById('searchNote');
+    const btnClearFilters = document.getElementById('btnClearFilters');
+
+    const fixedDailyInput = document.getElementById('fixedDailyInput');
+    const saveFixedDailyBtn = document.getElementById('saveFixedDailyBtn');
+    const carryoverInput = document.getElementById('carryoverInput');
+    const saveCarryoverBtn = document.getElementById('saveCarryoverBtn');
 
     // ---------------- Helpers ----------------
-    function el(id) { return document.getElementById(id); }
-    function loadJSON(key, fallback) { try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback } catch(e){ return fallback } }
-    function saveJSON(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
-    function loadNumber(key, fallback) { const v = localStorage.getItem(key); return v === null ? fallback : Number(v); }
-    function saveNumber(key, value) { localStorage.setItem(key, String(value)); }
-    function nowKey(d = new Date()) { return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`; }
-    function nowTime(d = new Date()){ return d.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}); }
-    function displayDateTime(d = new Date()){ return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${nowTime(d)}`; }
-    function parseRupiah(input) { let s = String(input||'').trim().replace(/[^\d]/g,''); return s === '' ? NaN : Number(s); }
-    function formatRupiah(num) { return isNaN(num) ? '0' : Number(num).toLocaleString('id-ID'); }
-
+    function saveNumber(key, val) { localStorage.setItem(key, String(val)); }
+    function loadNumber(key, def) { const v = localStorage.getItem(key); return (v && !isNaN(v)) ? Number(v) : def; }
+    function saveJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+    function loadJSON(key, def) { const v = localStorage.getItem(key); try { return v ? JSON.parse(v) : def; } catch { return def; } }
+    function formatRupiah(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+    function parseRupiah(str) {
+        const cleaned = str.replace(/\./g, '').replace(/[^\d]/g, '');
+        const num = parseInt(cleaned, 10);
+        return isNaN(num) ? 0 : num;
+    }
+    function nowKey() {
+        const now = new Date();
+        return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+    }
+    function nowDateTime() {
+        const now = new Date();
+        const y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0'), d=String(now.getDate()).padStart(2,'0');
+        const h=String(now.getHours()).padStart(2,'0'), min=String(now.getMinutes()).padStart(2,'0'), s=String(now.getSeconds()).padStart(2,'0');
+        return `${y}-${m}-${d} ${h}:${min}:${s}`;
+    }
+    function daysBetween(d1, d2) {
+        const ms = d2 - d1;
+        return Math.floor(ms / (1000*60*60*24));
+    }
     function isoToDate(iso) {
-        try { return new Date(iso); } catch(e) { return null; }
+        const dt = new Date(iso);
+        return isNaN(dt.getTime()) ? null : dt;
     }
 
-    function parseDateKey(key) {
-        // key format: d/m/yyyy
-        try {
-            if (!key) return null;
-            const parts = String(key).split('/');
-            const d = Number(parts[0]), m = Number(parts[1]) - 1, y = Number(parts[2]);
-            return new Date(y, m, d);
-        } catch (e) { return null; }
+    // ---------------- Initialization ----------------
+    function init() {
+        balance = loadNumber(LS_BALANCE, 0);
+        history = loadJSON(LS_HISTORY, []);
+        lastUndo = loadJSON(LS_LAST_UNDO, null);
+        carryover = loadNumber(LS_CARRYOVER, 0);
+        fixedDailyLimit = loadNumber(LS_DAILY_LIMIT, 0);
+        targetDays = loadNumber(LS_TARGET_DAYS, 0);
+        targetModeValue = localStorage.getItem(LS_TARGET_MODE) || 'days';
+        targetStartRaw = localStorage.getItem(LS_TARGET_START) || null;
+
+        targetDaysInput.value = targetDays > 0 ? targetDays : '';
+        targetModeSelect.value = targetModeValue;
+        fixedDailyInput.value = fixedDailyLimit > 0 ? fixedDailyLimit : '';
+        carryoverInput.value = carryover;
+
+        updateUI();
     }
 
-    function daysBetween(a, b) {
-        const msDay = 24 * 60 * 60 * 1000;
-        const ad = new Date(a.getFullYear(), a.getMonth(), a.getDate());
-        const bd = new Date(b.getFullYear(), b.getMonth(), b.getDate());
-        return Math.max(0, Math.round((bd - ad) / msDay));
-    }
-
-    function onAmountInput(e) {
-        const numeric = e.target.value.replace(/[^\d]/g,'');
-        e.target.value = numeric === '' ? '' : formatRupiah(Number(numeric));
-    }
-    function onAdminBalanceInput(e) { onAmountInput(e); }
-    function onAmountKeyDown(e){ if (e.key === 'Enter') addTransaction('Expense'); }
-
-    // ---------------- Transaction Logic ----------------
+    // ---------------- Actions ----------------
     function addTransaction(type) {
-        const amtRaw = amountInput.value;
-        const amount = parseRupiah(amtRaw);
-        const note = (noteInput.value || '').trim() || (type === 'Income' ? 'Income' : 'Expense');
+        const rawAmt = amountInput.value.trim();
+        if (!rawAmt) { alert('Please enter an amount'); return; }
+        const amt = parseRupiah(rawAmt);
+        if (amt <= 0) { alert('Amount must be positive'); return; }
+        const note = noteInput.value.trim();
 
-        if (isNaN(amount) || amount <= 0) { alert('Enter a valid amount'); return; }
-
-        // Use today's adaptive available budget (fixedDailyLimit is kept for compatibility but we compute adaptive budget)
-        if (type === 'Expense' && fixedDailyLimit > 0) {
-            const todayKey = nowKey();
-            const spentToday = history.filter(h => h.dateKey === todayKey && h.type === 'Expense').reduce((s,h)=>s+h.amount, 0);
-            const availableBudget = getAdaptiveDailyBudget() + carryover;
-            const projectedSpend = spentToday + amount;
-
-            if (projectedSpend > availableBudget) {
-                const overage = projectedSpend - availableBudget;
-                const proceed = confirm(
-                    `⚠️ WARNING: This expense would exceed your daily budget!\n\n` +
-                    `Available Budget (today): Rp ${formatRupiah(availableBudget)}\n` +
-                    `Already Spent Today: Rp ${formatRupiah(spentToday)}\n` +
-                    `This Expense: Rp ${formatRupiah(amount)}\n` +
-                    `Overage: Rp ${formatRupiah(overage)}\n\n` +
-                    `Continue anyway?`
-                );
-                if (!proceed) return;
-            }
-        }
-
-        const t = {
+        const entry = {
             id: Date.now(),
             type,
-            amount,
+            amount: amt,
             note,
-            timestamp: new Date().toISOString(),
             dateKey: nowKey(),
-            fullDate: displayDateTime()
+            fullDate: nowDateTime(),
+            timestamp: new Date().toISOString()
         };
 
-        lastUndo = { action: 'add', transaction: t, prevBalance: balance };
+        lastUndo = { balance, entry };
         saveJSON(LS_LAST_UNDO, lastUndo);
 
-        balance = balance + (type === 'Income' ? amount : -amount);
-        history.push(t);
+        if (type === 'Income') balance += amt;
+        else if (type === 'Expense') balance -= amt;
+
+        history.push(entry);
         persistAll();
+        updateUI();
         amountInput.value = '';
         noteInput.value = '';
-        updateUI();
-
-        if (type === 'Income' && amount > 100000) showPaydayModal();
     }
 
     function undoLast() {
         const undo = loadJSON(LS_LAST_UNDO, null);
-        if (!undo) { alert('No action to undo'); return; }
-        if (undo.action === 'add') {
-            const idx = history.findIndex(h => h.id === undo.transaction.id);
-            if (idx > -1) history.splice(idx,1);
-            balance = undo.prevBalance;
-            lastUndo = null;
-            persistAll();
-            updateUI();
-            alert('Last transaction undone');
-        }
+        if (!undo) { alert('Nothing to undo'); return; }
+        balance = undo.balance;
+        const idx = history.findIndex(h => h.id === undo.entry.id);
+        if (idx > -1) history.splice(idx, 1);
+        localStorage.removeItem(LS_LAST_UNDO);
+        persistAll();
+        updateUI();
+        alert('Last action undone');
     }
 
     function takeSnapshot() {
-        const t = { id: Date.now(), type: 'Snapshot', amount: balance, note: 'Snapshot', timestamp: new Date().toISOString(), dateKey: nowKey(), fullDate: displayDateTime() };
-        history.push(t);
-        saveJSON(LS_HISTORY, history);
-        updateUI();
-        alert('Snapshot recorded');
-    }
-
-    function quickAddModal() {
-        const v = prompt('Quick add amount (e.g. 50.000)');
-        if (!v) return;
-        const amount = parseRupiah(v);
-        if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
-        const t = { id: Date.now(), type: 'Income', amount, note: 'Quick Add', timestamp: new Date().toISOString(), dateKey: nowKey(), fullDate: displayDateTime() };
-        lastUndo = { action:'add', transaction: t, prevBalance: balance };
-        saveJSON(LS_LAST_UNDO, lastUndo);
-        balance += amount;
-        history.push(t);
+        const note = prompt('Note for snapshot (optional):') || '';
+        const entry = {
+            id: Date.now(),
+            type: 'Snapshot',
+            amount: balance,
+            note,
+            dateKey: nowKey(),
+            fullDate: nowDateTime(),
+            timestamp: new Date().toISOString()
+        };
+        history.push(entry);
         persistAll();
         updateUI();
-        if (amount > 100000) showPaydayModal();
+        alert('Snapshot saved!');
     }
 
-    // ---------------- Export / Import ----------------
+    function quickAddBalance() {
+        quickAddModal.classList.add('active');
+    }
+    function confirmQuickAddFn() {
+        const val = quickAddInput.value.trim();
+        if (!val) { alert('Enter a value'); return; }
+        const newBal = parseRupiah(val);
+        if (newBal < 0) { alert('Must be non-negative'); return; }
+        balance = newBal;
+        persistAll();
+        updateUI();
+        quickAddModal.classList.remove('active');
+        quickAddInput.value = '';
+        alert('Balance updated!');
+    }
+    function cancelQuickAddFn() {
+        quickAddModal.classList.remove('active');
+        quickAddInput.value = '';
+    }
+
+    function saveTargetDaysFn() {
+        const val = targetDaysInput.value.trim();
+        targetDays = (val && !isNaN(val)) ? Math.max(0, parseInt(val,10)) : 0;
+        targetModeValue = targetModeSelect.value;
+        initTargetStart();
+        persistAll();
+        updateUI();
+        alert('Target saved!');
+    }
+
+    function saveFixedDailyLimitFn() {
+        const val = fixedDailyInput.value.trim();
+        fixedDailyLimit = (val && !isNaN(val)) ? Math.max(0, parseInt(val,10)) : 0;
+        persistAll();
+        updateUI();
+        alert('Fixed daily limit saved!');
+    }
+
+    function saveCarryoverFn() {
+        const val = carryoverInput.value.trim();
+        carryover = (val && !isNaN(val)) ? parseInt(val,10) : 0;
+        persistAll();
+        updateUI();
+        alert('Carryover saved!');
+    }
+
     function exportCSV() {
-        if (!history.length) { alert('No logs to export'); return; }
-        const header = ['id','type','amount','note','fullDate','timestamp'];
-        const rows = history.map(h => [h.id,h.type,h.amount, `"${(h.note||'').replace(/"/g,'""')}"`, h.fullDate, h.timestamp]);
-        const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
-        downloadFile(csv, 'text/csv', `dwp_history_${Date.now()}.csv`);
+        if (!history.length) { alert('No data to export'); return; }
+        let csv = 'Type,Amount,Note,Date\n';
+        history.forEach(h => {
+            const escaped = (h.note || '').replace(/"/g, '""');
+            csv += `${h.type},${h.amount},"${escaped}",${h.fullDate}\n`;
+        });
+        downloadFile('wallet-export.csv', csv, 'text/csv');
     }
 
-    function downloadJSON(obj, filename='data.json') {
-        const text = JSON.stringify(obj, null, 2);
-        downloadFile(text, 'application/json', filename);
+    function exportJSON() {
+        const data = { balance, history, carryover, fixedDailyLimit, targetDays, targetModeValue, targetStartRaw };
+        const json = JSON.stringify(data, null, 2);
+        downloadFile('wallet-export.json', json, 'application/json');
     }
 
-    function downloadFile(text, mime, filename) {
-        const b = new Blob([text], {type:mime});
-        const url = URL.createObjectURL(b);
-        const a = document.createElement('a');
-        a.href = url; a.download = filename;
-        document.body.appendChild(a);
-        a.click(); a.remove(); URL.revokeObjectURL(url);
+    function importJSON() {
+        importFile.click();
     }
 
     function handleImport(e) {
-        const f = e.target.files && e.target.files[0];
-        if (!f) return;
+        const file = e.target.files[0];
+        if (!file) return;
         const reader = new FileReader();
-        reader.onload = () => {
+        reader.onload = ev => {
             try {
-                const parsed = JSON.parse(reader.result);
-                if (!Array.isArray(parsed)) throw new Error('Expected an array');
-                const existingIds = new Set(history.map(h=>h.id));
-                parsed.forEach(item => { if (!existingIds.has(item.id)) history.push(item); });
-                persistAll(); updateUI(); alert('Import complete');
-            } catch(err) { alert('Import failed: ' + err.message); }
+                const data = JSON.parse(ev.target.result);
+                balance = data.balance || 0;
+                history = data.history || [];
+                carryover = data.carryover || 0;
+                fixedDailyLimit = data.fixedDailyLimit || 0;
+                targetDays = data.targetDays || 0;
+                targetModeValue = data.targetModeValue || 'days';
+                targetStartRaw = data.targetStartRaw || null;
+                persistAll();
+                updateUI();
+                alert('Data imported successfully!');
+            } catch (err) {
+                alert('Import failed: invalid JSON');
+            }
         };
-        reader.readAsText(f);
-        importFile.value = '';
-    }
-
-    function applyFilter() {
-        const type = filterType.value;
-        const from = filterFrom.value ? new Date(filterFrom.value) : null;
-        const to = filterTo.value ? new Date(filterTo.value) : null;
-        const filtered = history.filter(h => {
-            if (type !== 'all' && h.type !== type) return false;
-            const dt = new Date(h.timestamp);
-            if (from && dt < from) return false;
-            if (to) { const toEnd = new Date(to); toEnd.setHours(23,59,59,999); if (dt > toEnd) return false; }
-            return true;
-        });
-        renderHistory(filtered);
-    }
-
-    function clearFilter() {
-        filterType.value = 'all'; filterFrom.value = ''; filterTo.value = '';
-        renderHistory(history.slice().reverse());
-    }
-
-    function setBalanceFromAdmin() {
-        const val = balanceInput.value;
-        const parsed = parseRupiah(val);
-        if (isNaN(parsed)) { alert('Invalid number'); return; }
-        if (!confirm('Overwrite balance?')) return;
-        const before = { id: Date.now()+1, type: 'Snapshot', amount: parsed, note: 'Admin overwrite', timestamp: new Date().toISOString(), dateKey: nowKey(), fullDate: displayDateTime() };
-        lastUndo = null; balance = parsed; history.push(before); persistAll(); balanceInput.value = ''; updateUI(); alert('Balance overwritten');
+        reader.readAsText(file);
     }
 
     function clearAllData() {
-        if (!confirm('Clear everything?')) return;
-        [LS_BALANCE, LS_HISTORY, LS_TARGET_DAYS, LS_TARGET_MODE, LS_LAST_UNDO, LS_CARRYOVER, LS_DAILY_LIMIT, LS_LAST_CARRYOVER_DATE, LS_TARGET_START].forEach(k => localStorage.removeItem(k));
-        balance = 0; history = []; lastUndo = null; carryover = 0; targetDays = 0; targetModeValue = 'days'; fixedDailyLimit = 0; targetStartRaw = null;
-        updateUI(); alert('All data cleared');
+        if (!confirm('Clear all data? This cannot be undone.')) return;
+        localStorage.clear();
+        location.reload();
     }
 
-    // ---------------- Carryover (fixed carryover per-day) ----------------
-    function applyCarryoverIfNewDay() {
-        const currentDate = nowKey();
-        const lastCarryoverDate = localStorage.getItem(LS_LAST_CARRYOVER_DATE);
-        if (lastCarryoverDate !== currentDate && fixedDailyLimit > 0) {
-            // compute spent yesterday using explicit yesterday key
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayKey = `${yesterday.getDate()}/${yesterday.getMonth()+1}/${yesterday.getFullYear()}`;
-            const spentYesterday = history.filter(h => h.dateKey === yesterdayKey && h.type === 'Expense').reduce((s, h) => s + h.amount, 0);
-            carryover = Math.max(0, fixedDailyLimit - spentYesterday);
-            localStorage.setItem(LS_LAST_CARRYOVER_DATE, currentDate);
-            persistAll();
-        }
+    function importReplace() {
+        if (!confirm('This will replace ALL your data. Continue?')) return;
+        importJSON();
     }
 
-    function showPaydayModal() { paydayDays.value = ''; paydayMode.value = 'days'; paydayModal.classList.add('active'); }
-
-    function confirmPayday() {
-        const days = Number(paydayDays.value);
-        if (isNaN(days) || days <= 0) { alert('Enter valid days'); return; }
-        targetDays = days; targetModeValue = paydayMode.value;
-        targetDaysInput.value = targetDays; targetMode.value = targetModeValue;
-        setTargetStartToday();
-        // derive a daily limit that is mathematically true for the new target
-        const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
-        fixedDailyLimit = Math.max(1, Math.floor(balance / Math.max(1, divisor)));
-        localStorage.setItem(LS_DAILY_LIMIT, fixedDailyLimit);
-        localStorage.setItem(LS_LAST_CARRYOVER_DATE, nowKey());
-        carryover = 0; paydayModal.classList.remove('active'); persistAll(); updateUI();
+    function downloadFile(filename, content, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
     }
 
-    function skipPayday() { paydayModal.classList.remove('active'); }
+    // ---------------- Event Listeners ----------------
+    btnIncome.addEventListener('click', () => addTransaction('Income'));
+    btnExpense.addEventListener('click', () => addTransaction('Expense'));
+    btnUndo.addEventListener('click', undoLast);
+    snapshotBtn.addEventListener('click', takeSnapshot);
+    quickAddBtn.addEventListener('click', quickAddBalance);
+    confirmQuickAdd.addEventListener('click', confirmQuickAddFn);
+    cancelQuickAdd.addEventListener('click', cancelQuickAddFn);
+    saveTargetBtn.addEventListener('click', saveTargetDaysFn);
+    saveFixedDailyBtn.addEventListener('click', saveFixedDailyLimitFn);
+    saveCarryoverBtn.addEventListener('click', saveCarryoverFn);
+    btnExport.addEventListener('click', exportCSV);
+    btnExportJSON.addEventListener('click', exportJSON);
+    btnImport.addEventListener('click', importJSON);
+    importFile.addEventListener('change', handleImport);
+    btnClearAll.addEventListener('click', clearAllData);
+    btnImportReplace.addEventListener('click', importReplace);
 
-    function saveTargetDays() {
-        const days = Number(targetDaysInput.value);
-        if (isNaN(days) || days < 0) { alert('Enter valid number'); return; }
-        targetDays = days; targetModeValue = targetMode.value;
-        setTargetStartToday();
-        const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
-        fixedDailyLimit = Math.max(1, Math.floor(balance / Math.max(1, divisor)));
-        localStorage.setItem(LS_DAILY_LIMIT, fixedDailyLimit);
-        localStorage.setItem(LS_LAST_CARRYOVER_DATE, nowKey());
-        carryover = 0; persistAll(); updateUI(); alert('Target saved');
-    }
+    historyFilter.addEventListener('change', updateUI);
+    searchNote.addEventListener('input', updateUI);
+    btnClearFilters.addEventListener('click', () => {
+        historyFilter.value = 'all';
+        searchNote.value = '';
+        updateUI();
+    });
 
-    function setTargetStartToday() {
+    function initTargetStart() {
+        if (targetStartRaw) return;
         const todayIso = new Date().toISOString();
         targetStartRaw = todayIso;
         localStorage.setItem(LS_TARGET_START, todayIso);
@@ -662,7 +626,18 @@
             targetDisplay.style.display = 'none';
         }
 
-        renderHistory(history.slice().reverse());
+        // Apply filters
+        let filtered = history.slice();
+        const filterType = historyFilter.value;
+        if (filterType !== 'all') {
+            filtered = filtered.filter(h => h.type === filterType);
+        }
+        const searchTerm = searchNote.value.trim().toLowerCase();
+        if (searchTerm) {
+            filtered = filtered.filter(h => (h.note || '').toLowerCase().includes(searchTerm));
+        }
+
+        renderHistory(filtered.slice().reverse());
     }
 
     function renderHistory(list) {
@@ -712,6 +687,7 @@
         admin.style.display = admin.style.display === 'block' ? 'none' : 'block';
     });
 
+    init();
     setInterval(() => { persistAll(); }, 15000);
     window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undoLast(); } });
 })();
