@@ -349,29 +349,25 @@
             timestamp: new Date().toISOString()
         };
 
-        lastUndo = { balance, entry };
-        saveJSON(LS_LAST_UNDO, lastUndo);
-
+        lastUndo = { balance, history: [...history] };
+        history.push(entry);
         if (type === 'Income') balance += amt;
         else if (type === 'Expense') balance -= amt;
 
-        history.push(entry);
-        persistAll();
-        updateUI();
         amountInput.value = '';
         noteInput.value = '';
+        persistAll();
+        updateUI();
     }
 
     function undoLast() {
-        const undo = loadJSON(LS_LAST_UNDO, null);
-        if (!undo) { alert('Nothing to undo'); return; }
-        balance = undo.balance;
-        const idx = history.findIndex(h => h.id === undo.entry.id);
-        if (idx > -1) history.splice(idx, 1);
-        localStorage.removeItem(LS_LAST_UNDO);
+        if (!lastUndo) { alert('Nothing to undo'); return; }
+        balance = lastUndo.balance;
+        history = lastUndo.history;
+        lastUndo = null;
         persistAll();
         updateUI();
-        alert('Last action undone');
+        alert('Last transaction undone!');
     }
 
     function takeSnapshot() {
@@ -436,7 +432,7 @@
         const val = targetDaysInput.value.trim();
         targetDays = (val && !isNaN(val)) ? Math.max(0, parseInt(val,10)) : 0;
         targetModeValue = targetModeSelect.value;
-initTargetStart();
+        initTargetStart();
         persistAll();
         updateUI();
         alert('Target saved!');
@@ -478,27 +474,99 @@ initTargetStart();
         importFile.click();
     }
 
+    // MAJOR FIX: Import JSON function now properly resets file input and handles both formats
     function handleImport(e) {
         const file = e.target.files[0];
-        if (!file) return;
+        if (!file) {
+            // Reset input to allow re-selecting same file
+            importFile.value = '';
+            return;
+        }
+        
         const reader = new FileReader();
         reader.onload = ev => {
             try {
                 const data = JSON.parse(ev.target.result);
-                balance = data.balance || 0;
-                history = data.history || [];
-                carryover = data.carryover || 0;
-                fixedDailyLimit = data.fixedDailyLimit || 0;
-                targetDays = data.targetDays || 0;
-                targetModeValue = data.targetModeValue || 'days';
-                targetStartRaw = data.targetStartRaw || null;
+                
+                // Detect format: Array (history only) or Object (full export)
+                if (Array.isArray(data)) {
+                    // History-only format: just an array of transactions
+                    console.log('Detected history-only format');
+                    
+                    // Calculate balance from transactions
+                    let calculatedBalance = 0;
+                    data.forEach(entry => {
+                        if (entry.type === 'Income') {
+                            calculatedBalance += entry.amount;
+                        } else if (entry.type === 'Expense') {
+                            calculatedBalance -= entry.amount;
+                        }
+                    });
+                    
+                    // Ask user if they want to merge or replace
+                    const shouldMerge = confirm(
+                        '📥 Import History\n\n' +
+                        'Found ' + data.length + ' transaction(s)\n' +
+                        'Calculated Balance: Rp ' + formatRupiah(calculatedBalance) + '\n\n' +
+                        'Click OK to MERGE with existing data\n' +
+                        'Click Cancel to REPLACE all data'
+                    );
+                    
+                    if (shouldMerge) {
+                        // Merge: add to existing history
+                        history = [...history, ...data];
+                        balance += calculatedBalance;
+                    } else {
+                        // Replace: use only imported data
+                        history = data;
+                        balance = calculatedBalance;
+                        // Reset other values
+                        carryover = 0;
+                        fixedDailyLimit = 0;
+                        targetDays = 0;
+                        targetModeValue = 'days';
+                        targetStartRaw = null;
+                    }
+                    
+                } else if (typeof data === 'object' && data !== null) {
+                    // Full export format: object with all fields
+                    console.log('Detected full export format');
+                    
+                    balance = typeof data.balance === 'number' ? data.balance : 0;
+                    history = Array.isArray(data.history) ? data.history : [];
+                    carryover = typeof data.carryover === 'number' ? data.carryover : 0;
+                    fixedDailyLimit = typeof data.fixedDailyLimit === 'number' ? data.fixedDailyLimit : 0;
+                    targetDays = typeof data.targetDays === 'number' ? data.targetDays : 0;
+                    targetModeValue = data.targetModeValue || 'days';
+                    targetStartRaw = data.targetStartRaw || null;
+                    
+                } else {
+                    throw new Error('Invalid data format - expected array or object');
+                }
+                
+                // Update UI inputs to reflect imported values
+                targetDaysInput.value = targetDays > 0 ? targetDays : '';
+                targetModeSelect.value = targetModeValue;
+                fixedDailyInput.value = fixedDailyLimit > 0 ? fixedDailyLimit : '';
+                carryoverInput.value = carryover;
+                
                 persistAll();
                 updateUI();
-                alert('Data imported successfully!');
+                alert('✅ Data imported successfully!\n\nImported:\n- Balance: Rp ' + formatRupiah(balance) + '\n- ' + history.length + ' transaction(s)');
             } catch (err) {
-                alert('Import failed: invalid JSON');
+                alert('❌ Import failed: ' + (err.message || 'Invalid JSON file'));
+                console.error('Import error:', err);
+            } finally {
+                // CRITICAL FIX: Always reset the file input to allow reimporting
+                importFile.value = '';
             }
         };
+        
+        reader.onerror = () => {
+            alert('❌ Failed to read file');
+            importFile.value = '';
+        };
+        
         reader.readAsText(file);
     }
 
