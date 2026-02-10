@@ -139,7 +139,7 @@
     <div class="card" aria-labelledby="addTransactionTitle">
         <h3 id="addTransactionTitle">Add Transaction</h3>
         <div class="row">
-            <input type="text" id="amount" inputmode="numeric" placeholder="Amount (e.g. 20.000)" autocomplete="off" />
+            <input type="text" id="amount" placeholder="Amount (e.g. 20.000)" autocomplete="off" />
             <input type="text" id="note" placeholder="Description (optional)" autocomplete="off" />
         </div>
         <div style="display:flex; gap:10px; margin-top:10px;">
@@ -181,11 +181,11 @@
         </div>
         <h4 style="margin-top:14px">Set Fixed Daily Limit (Optional)</h4>
         <p class="muted">This sets an immutable daily spending limit. Overrules target calculations if set. Leave blank or zero to rely only on adaptive targeting.</p>
-        <input type="number" id="fixedDailyInput" placeholder="e.g. 50.000" />
+        <input type="text" id="fixedDailyInput" placeholder="e.g. 50.000" />
         <button class="small-btn blue" id="saveFixedDailyBtn" style="width:100%; margin-top:8px">Save Fixed Daily Limit</button>
         <h4 style="margin-top:14px">Carryover Management</h4>
         <p class="muted">Manually adjust leftover budget from previous days.</p>
-        <input type="number" id="carryoverInput" placeholder="e.g. 10000" />
+        <input type="text" id="carryoverInput" placeholder="e.g. 10.000" />
         <button class="small-btn blue" id="saveCarryoverBtn" style="width:100%; margin-top:8px">Set Carryover</button>
     </div>
 
@@ -199,7 +199,7 @@
     <div class="modal-content">
         <h3>Quick Add Balance</h3>
         <p class="muted">Enter a new amount to <strong>set</strong> your total balance directly (not add to it).</p>
-        <input type="number" id="quickAddInput" placeholder="e.g. 1000000" style="margin-top:8px" />
+        <input type="text" id="quickAddInput" placeholder="e.g. 1.000.000" style="margin-top:8px" />
         <button class="small-btn green" id="confirmQuickAdd">Set Balance</button>
         <button class="small-btn" id="cancelQuickAdd">Cancel</button>
     </div>
@@ -305,12 +305,36 @@
         const dt = new Date(iso);
         return isNaN(dt.getTime()) ? null : dt;
     }
-    // FIX BUG 3: Normalize date to midnight for comparison
     function normalizeToMidnight(date) {
         const d = new Date(date);
         d.setHours(0, 0, 0, 0);
         return d;
     }
+
+    // AUTO-FORMATTING: Format input fields with Indonesian Rupiah thousands separator
+    function autoFormatRupiahInput(inputElement) {
+        const cursorPosition = inputElement.selectionStart;
+        const oldValue = inputElement.value;
+        const oldLength = oldValue.length;
+        
+        // Parse and reformat
+        const numericValue = parseRupiah(oldValue);
+        const formattedValue = numericValue > 0 ? formatRupiah(numericValue) : '';
+        
+        inputElement.value = formattedValue;
+        
+        // Restore cursor position accounting for added dots
+        const newLength = formattedValue.length;
+        const diff = newLength - oldLength;
+        const newCursorPosition = cursorPosition + diff;
+        inputElement.setSelectionRange(newCursorPosition, newCursorPosition);
+    }
+
+    // Add auto-formatting to amount inputs
+    amountInput.addEventListener('input', () => autoFormatRupiahInput(amountInput));
+    quickAddInput.addEventListener('input', () => autoFormatRupiahInput(quickAddInput));
+    fixedDailyInput.addEventListener('input', () => autoFormatRupiahInput(fixedDailyInput));
+    carryoverInput.addEventListener('input', () => autoFormatRupiahInput(carryoverInput));
 
     // ---------------- Initialization ----------------
     function init() {
@@ -325,8 +349,8 @@
 
         targetDaysInput.value = targetDays > 0 ? targetDays : '';
         targetModeSelect.value = targetModeValue;
-        fixedDailyInput.value = fixedDailyLimit > 0 ? fixedDailyLimit : '';
-        carryoverInput.value = carryover;
+        fixedDailyInput.value = fixedDailyLimit > 0 ? formatRupiah(fixedDailyLimit) : '';
+        carryoverInput.value = carryover !== 0 ? formatRupiah(carryover) : '';
 
         updateUI();
     }
@@ -391,14 +415,12 @@
         quickAddModal.classList.add('active');
     }
     
-    // FIX BUG 1: Quick Add now creates an Income entry to maintain history integrity
     function confirmQuickAddFn() {
         const val = quickAddInput.value.trim();
         if (!val) { alert('Enter a value'); return; }
         const newBal = parseRupiah(val);
         if (newBal < 0) { alert('Must be non-negative'); return; }
         
-        // Calculate the difference to add/subtract
         const difference = newBal - balance;
         
         if (difference !== 0) {
@@ -440,7 +462,7 @@
 
     function saveFixedDailyLimitFn() {
         const val = fixedDailyInput.value.trim();
-        fixedDailyLimit = (val && !isNaN(val)) ? Math.max(0, parseInt(val,10)) : 0;
+        fixedDailyLimit = parseRupiah(val);
         persistAll();
         updateUI();
         alert('Fixed daily limit saved!');
@@ -448,7 +470,7 @@
 
     function saveCarryoverFn() {
         const val = carryoverInput.value.trim();
-        carryover = (val && !isNaN(val)) ? parseInt(val,10) : 0;
+        carryover = parseRupiah(val);
         persistAll();
         updateUI();
         alert('Carryover saved!');
@@ -474,11 +496,9 @@
         importFile.click();
     }
 
-    // MAJOR FIX: Import JSON function now properly resets file input and handles both formats
     function handleImport(e) {
         const file = e.target.files[0];
         if (!file) {
-            // Reset input to allow re-selecting same file
             importFile.value = '';
             return;
         }
@@ -488,12 +508,9 @@
             try {
                 const data = JSON.parse(ev.target.result);
                 
-                // Detect format: Array (history only) or Object (full export)
                 if (Array.isArray(data)) {
-                    // History-only format: just an array of transactions
                     console.log('Detected history-only format');
                     
-                    // Calculate balance from transactions
                     let calculatedBalance = 0;
                     data.forEach(entry => {
                         if (entry.type === 'Income') {
@@ -503,7 +520,6 @@
                         }
                     });
                     
-                    // Ask user if they want to merge or replace
                     const shouldMerge = confirm(
                         '📥 Import History\n\n' +
                         'Found ' + data.length + ' transaction(s)\n' +
@@ -513,14 +529,11 @@
                     );
                     
                     if (shouldMerge) {
-                        // Merge: add to existing history
                         history = [...history, ...data];
                         balance += calculatedBalance;
                     } else {
-                        // Replace: use only imported data
                         history = data;
                         balance = calculatedBalance;
-                        // Reset other values
                         carryover = 0;
                         fixedDailyLimit = 0;
                         targetDays = 0;
@@ -529,7 +542,6 @@
                     }
                     
                 } else if (typeof data === 'object' && data !== null) {
-                    // Full export format: object with all fields
                     console.log('Detected full export format');
                     
                     balance = typeof data.balance === 'number' ? data.balance : 0;
@@ -544,11 +556,10 @@
                     throw new Error('Invalid data format - expected array or object');
                 }
                 
-                // Update UI inputs to reflect imported values
                 targetDaysInput.value = targetDays > 0 ? targetDays : '';
                 targetModeSelect.value = targetModeValue;
-                fixedDailyInput.value = fixedDailyLimit > 0 ? fixedDailyLimit : '';
-                carryoverInput.value = carryover;
+                fixedDailyInput.value = fixedDailyLimit > 0 ? formatRupiah(fixedDailyLimit) : '';
+                carryoverInput.value = carryover !== 0 ? formatRupiah(carryover) : '';
                 
                 persistAll();
                 updateUI();
@@ -557,7 +568,6 @@
                 alert('❌ Import failed: ' + (err.message || 'Invalid JSON file'));
                 console.error('Import error:', err);
             } finally {
-                // CRITICAL FIX: Always reset the file input to allow reimporting
                 importFile.value = '';
             }
         };
@@ -636,8 +646,7 @@
         if (targetStartRaw) localStorage.setItem(LS_TARGET_START, targetStartRaw);
     }
 
-    // ---------------- Adaptive Targeting / Recalculation (Option C) ----------------
-    // FIX BUG 3: Fixed timezone-sensitive date comparison
+    // ---------------- Adaptive Targeting / Recalculation ----------------
     function computeAverageDailyExpenseSinceStart() {
         if (!targetStartRaw) return null;
         const startDate = isoToDate(targetStartRaw);
@@ -645,10 +654,8 @@
         const endDate = new Date();
         const daysElapsed = Math.max(1, daysBetween(startDate, endDate));
         
-        // Normalize start date to midnight for proper comparison
         const normalizedStart = normalizeToMidnight(startDate);
         
-        // sum expenses from startDate (inclusive)
         const totalExpenses = history.reduce((sum, h) => {
             if (h.type !== 'Expense') return sum;
             const hd = isoToDate(h.timestamp);
@@ -660,36 +667,28 @@
             return sum;
         }, 0);
         
-        // If no expense recorded yet, return null to indicate insufficient data
         if (totalExpenses === 0) return null;
         return totalExpenses / daysElapsed;
     }
 
     function computeEstimatedRemainingDays() {
         if (balance <= 0) return 0;
-        // Prefer historical average since target start if available
         const avg = computeAverageDailyExpenseSinceStart();
         if (avg && avg > 0) {
             const estimate = Math.floor(balance / avg);
             return Math.max(0, estimate);
         }
-        // Fallback: if targetDays available, compute remaining using original divisor
         if (targetDays > 0) {
-            // If target was in months, convert to days
             const divisor = targetModeValue === 'monthly' ? targetDays * 30 : targetDays;
-            // remaining days if following original plan given current balance and original divisor:
             const originalDaily = Math.max(1, Math.floor(balance / Math.max(1, divisor)));
-            // If originalDaily > 0, compute how many days that yields
             return Math.max(0, Math.floor(balance / Math.max(1, originalDaily)));
         }
-        // last fallback: assume 1 day
         return Math.max(0, Math.floor(balance / 1));
     }
 
     function getAdaptiveDailyBudget() {
-        // daily budget = floor(balance / remainingDays)
         const rem = computeEstimatedRemainingDays();
-        if (rem <= 0) return Math.max(0, Math.floor(balance)); // whole balance
+        if (rem <= 0) return Math.max(0, Math.floor(balance));
         return Math.max(1, Math.floor(balance / Math.max(1, rem)));
     }
 
@@ -707,10 +706,17 @@
             origTargetEl.innerText = targetDays > 0 ? `${targetDays} ${targetModeValue === 'monthly' ? 'month(s)' : 'day(s)'}` : '—';
             targetStartDateEl.innerText = targetStartRaw ? (new Date(targetStartRaw).toLocaleDateString('id-ID')) : '—';
 
-            // FIX BUG 2: Don't double-count carryover - it's meant to be extra on top of daily budget
-            // The adaptive budget already accounts for all remaining balance
-            const adaptiveBudget = getAdaptiveDailyBudget();
-            const availableBudget = adaptiveBudget + carryover;
+            // CRITICAL FIX: Use fixed daily limit if set, otherwise use adaptive budget
+            let dailyBudget;
+            if (fixedDailyLimit > 0) {
+                // Use the fixed daily limit (immutable)
+                dailyBudget = fixedDailyLimit;
+            } else {
+                // Use adaptive budget calculation
+                dailyBudget = getAdaptiveDailyBudget();
+            }
+            
+            const availableBudget = dailyBudget + carryover;
             dailyBudgetEl.innerText = `Rp ${formatRupiah(availableBudget)}`;
 
             const todayKey = nowKey();
@@ -731,7 +737,6 @@
             targetDisplay.style.display = 'none';
         }
 
-        // Apply filters
         let filtered = history.slice();
         const filterType = historyFilter.value;
         if (filterType !== 'all') {
@@ -755,7 +760,6 @@
         }).join('');
     }
 
-    // FIX BUG 1: Fixed snapshot deletion - now properly recalculates balance from all transactions
     window.deleteLog = function(id) {
         if (!confirm('Delete this log entry?')) return;
         const idx = history.findIndex(h=>h.id===id);
@@ -763,14 +767,9 @@
             const deletedTransaction = history[idx];
 
             if (deletedTransaction.type === 'Income') {
-                // removing an income reduces balance by that amount
                 balance -= deletedTransaction.amount;
             } else if (deletedTransaction.type === 'Expense') {
-                // removing an expense increases balance
                 balance += deletedTransaction.amount;
-            } else if (deletedTransaction.type === 'Snapshot') {
-                // Snapshots don't affect balance - they just record it
-                // No balance adjustment needed
             }
 
             history.splice(idx, 1);
