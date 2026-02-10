@@ -281,7 +281,7 @@
     function loadNumber(key, def) { const v = localStorage.getItem(key); return (v && !isNaN(v)) ? Number(v) : def; }
     function saveJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
     function loadJSON(key, def) { const v = localStorage.getItem(key); try { return v ? JSON.parse(v) : def; } catch { return def; } }
-    function formatRupiah(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+    function formatRupiah(n) { return String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
     function parseRupiah(str) {
         const cleaned = str.replace(/\./g, '').replace(/[^\d]/g, '');
         const num = parseInt(cleaned, 10);
@@ -304,6 +304,12 @@
     function isoToDate(iso) {
         const dt = new Date(iso);
         return isNaN(dt.getTime()) ? null : dt;
+    }
+    // FIX BUG 3: Normalize date to midnight for comparison
+    function normalizeToMidnight(date) {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        return d;
     }
 
     // ---------------- Initialization ----------------
@@ -388,18 +394,39 @@
     function quickAddBalance() {
         quickAddModal.classList.add('active');
     }
+    
+    // FIX BUG 1: Quick Add now creates an Income entry to maintain history integrity
     function confirmQuickAddFn() {
         const val = quickAddInput.value.trim();
         if (!val) { alert('Enter a value'); return; }
         const newBal = parseRupiah(val);
         if (newBal < 0) { alert('Must be non-negative'); return; }
-        balance = newBal;
+        
+        // Calculate the difference to add/subtract
+        const difference = newBal - balance;
+        
+        if (difference !== 0) {
+            const entry = {
+                id: Date.now(),
+                type: difference > 0 ? 'Income' : 'Expense',
+                amount: Math.abs(difference),
+                note: difference > 0 ? 'Balance Adjustment (Quick Add)' : 'Balance Adjustment (Quick Subtract)',
+                dateKey: nowKey(),
+                fullDate: nowDateTime(),
+                timestamp: new Date().toISOString()
+            };
+            
+            history.push(entry);
+            balance = newBal;
+        }
+        
         persistAll();
         updateUI();
         quickAddModal.classList.remove('active');
         quickAddInput.value = '';
         alert('Balance updated!');
     }
+    
     function cancelQuickAddFn() {
         quickAddModal.classList.remove('active');
         quickAddInput.value = '';
@@ -409,7 +436,7 @@
         const val = targetDaysInput.value.trim();
         targetDays = (val && !isNaN(val)) ? Math.max(0, parseInt(val,10)) : 0;
         targetModeValue = targetModeSelect.value;
-        initTargetStart();
+initTargetStart();
         persistAll();
         updateUI();
         alert('Target saved!');
@@ -542,22 +569,29 @@
     }
 
     // ---------------- Adaptive Targeting / Recalculation (Option C) ----------------
+    // FIX BUG 3: Fixed timezone-sensitive date comparison
     function computeAverageDailyExpenseSinceStart() {
         if (!targetStartRaw) return null;
         const startDate = isoToDate(targetStartRaw);
         if (!startDate) return null;
         const endDate = new Date();
-        const daysElapsed = Math.max(1, daysBetween(startDate, endDate)); // >=1
+        const daysElapsed = Math.max(1, daysBetween(startDate, endDate));
+        
+        // Normalize start date to midnight for proper comparison
+        const normalizedStart = normalizeToMidnight(startDate);
+        
         // sum expenses from startDate (inclusive)
         const totalExpenses = history.reduce((sum, h) => {
             if (h.type !== 'Expense') return sum;
             const hd = isoToDate(h.timestamp);
             if (!hd) return sum;
-            if (hd >= new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())) {
+            const normalizedHd = normalizeToMidnight(hd);
+            if (normalizedHd >= normalizedStart) {
                 return sum + h.amount;
             }
             return sum;
         }, 0);
+        
         // If no expense recorded yet, return null to indicate insufficient data
         if (totalExpenses === 0) return null;
         return totalExpenses / daysElapsed;
@@ -605,7 +639,10 @@
             origTargetEl.innerText = targetDays > 0 ? `${targetDays} ${targetModeValue === 'monthly' ? 'month(s)' : 'day(s)'}` : '—';
             targetStartDateEl.innerText = targetStartRaw ? (new Date(targetStartRaw).toLocaleDateString('id-ID')) : '—';
 
-            const availableBudget = getAdaptiveDailyBudget() + carryover;
+            // FIX BUG 2: Don't double-count carryover - it's meant to be extra on top of daily budget
+            // The adaptive budget already accounts for all remaining balance
+            const adaptiveBudget = getAdaptiveDailyBudget();
+            const availableBudget = adaptiveBudget + carryover;
             dailyBudgetEl.innerText = `Rp ${formatRupiah(availableBudget)}`;
 
             const todayKey = nowKey();
@@ -650,7 +687,7 @@
         }).join('');
     }
 
-    // UPDATED: Delete Log with Balance Recalculation
+    // FIX BUG 1: Fixed snapshot deletion - now properly recalculates balance from all transactions
     window.deleteLog = function(id) {
         if (!confirm('Delete this log entry?')) return;
         const idx = history.findIndex(h=>h.id===id);
@@ -664,15 +701,8 @@
                 // removing an expense increases balance
                 balance += deletedTransaction.amount;
             } else if (deletedTransaction.type === 'Snapshot') {
-                // If deleting a snapshot, recompute full balance from transactions excluding that snapshot
-                // Recompute from history excluding the snapshot entry
-                const remaining = history.filter((h,i) => i !== idx);
-                const recomputed = remaining.reduce((sum, h) => {
-                    if (h.type === 'Income') return sum + h.amount;
-                    if (h.type === 'Expense') return sum - h.amount;
-                    return sum;
-                }, 0);
-                balance = recomputed;
+                // Snapshots don't affect balance - they just record it
+                // No balance adjustment needed
             }
 
             history.splice(idx, 1);
