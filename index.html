@@ -233,16 +233,10 @@
 (function() {
     'use strict';
 
-    const LS_BALANCE = 'balance';
+    // AUDIT FIX: Unified atomic state key to prevent fragmentation
+    const LS_BUDGET_STATE = 'budgetState';
     const LS_HISTORY = 'history';
     const LS_LAST_UNDO = 'lastUndo';
-    const LS_TARGET_DAYS = 'targetDays';
-    const LS_TARGET_START = 'targetStart';
-    const LS_STARTING_BALANCE = 'startingBalance';
-    const LS_CARRYOVER = 'carryover';
-    const LS_CREDIT = 'credit';
-    const LS_LAST_CHECK_DATE = 'lastCheckDate';
-    const LS_TODAY_BUDGET = 'todayBudget';
 
     let balance = 0;
     let history = [];
@@ -290,6 +284,70 @@
     function loadJSON(key, def=null) { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
     function removeItem(key) { localStorage.removeItem(key); }
     
+    // AUDIT FIX: StorageManager pattern with robust error handling
+    const StorageManager = {
+        save: (key, value) => {
+            try {
+                const serialized = JSON.stringify(value);
+                localStorage.setItem(key, serialized);
+            } catch (e) {
+                console.error("Storage write failed", e);
+            }
+        },
+        load: (key, defaultValue) => {
+            try {
+                const item = localStorage.getItem(key);
+                return item ? JSON.parse(item) : defaultValue;
+            } catch (e) {
+                console.warn("Storage read failed, using default", e);
+                return defaultValue;
+            }
+        }
+    };
+    
+    // AUDIT FIX: Atomic save/load for unified budget state
+    function saveBudgetState() {
+        const state = {
+            balance,
+            targetDays,
+            targetStartRaw,
+            startingBalance,
+            credit,
+            carryover,
+            lastCheckDate,
+            todayBudget,
+            spentFromLimitToday
+        };
+        StorageManager.save(LS_BUDGET_STATE, state);
+    }
+    
+    function loadBudgetState() {
+        const defaults = {
+            balance: 0,
+            targetDays: 0,
+            targetStartRaw: null,
+            startingBalance: 0,
+            credit: 0,
+            carryover: 0,
+            lastCheckDate: null,
+            todayBudget: 0,
+            spentFromLimitToday: 0
+        };
+        
+        const state = StorageManager.load(LS_BUDGET_STATE, defaults);
+        
+        // Validate and apply with type safety
+        balance = typeof state.balance === 'number' ? state.balance : 0;
+        targetDays = typeof state.targetDays === 'number' ? state.targetDays : 0;
+        targetStartRaw = state.targetStartRaw || null;
+        startingBalance = typeof state.startingBalance === 'number' ? state.startingBalance : 0;
+        credit = typeof state.credit === 'number' ? state.credit : 0;
+        carryover = typeof state.carryover === 'number' ? state.carryover : 0;
+        lastCheckDate = state.lastCheckDate || null;
+        todayBudget = typeof state.todayBudget === 'number' ? state.todayBudget : 0;
+        spentFromLimitToday = typeof state.spentFromLimitToday === 'number' ? state.spentFromLimitToday : 0;
+    }
+    
     // AUDIT FIX: Use reusable formatter for performance
     function formatRupiah(n) { 
         return rupiahFormatter.format(Math.abs(n)); 
@@ -327,87 +385,88 @@
 
     // ---------------- Init ----------------
     function init() {
-        balance = loadNumber(LS_BALANCE, 0);
+        // AUDIT FIX: Load unified budget state atomically (prevents partial corruption)
+        loadBudgetState();
+        
+        // History and undo remain separate (transactional data)
         history = loadJSON(LS_HISTORY, []);
         lastUndo = loadJSON(LS_LAST_UNDO, null);
-        targetDays = loadNumber(LS_TARGET_DAYS, 0);
-        targetStartRaw = localStorage.getItem(LS_TARGET_START);
-        startingBalance = loadNumber(LS_STARTING_BALANCE, 0);
-        carryover = loadNumber(LS_CARRYOVER, 0);
-        credit = loadNumber(LS_CREDIT, 0);
-        spentFromLimitToday = loadNumber('spentFromLimit_' + nowKey(), 0);
-        lastCheckDate = localStorage.getItem(LS_LAST_CHECK_DATE);
-        todayBudget = loadNumber(LS_TODAY_BUDGET, 0);
 
         cleanupOldDailyLimits();
-        checkNewDay();
+        checkDailyReset(); // AUDIT FIX: Renamed for clarity
         updateUI();
         initEventListeners();
     }
+    
+    // AUDIT FIX: Time-Delta Logic for day changes (eliminates Midnight Reset bug)
+    function checkDailyReset() {
+        const today = nowKey();
+        const lastResetDate = lastCheckDate;
+        const todayDate = new Date().toDateString();
+        const lastDate = lastResetDate ? new Date(lastResetDate).toDateString() : null;
 
-    // ---------------- Check if new day — Credit System ----------------
-    function checkNewDay() {
+        // AUDIT FIX: Check if new day has started
+        if (todayDate !== lastDate && targetDays > 0 && targetStartRaw) {
+            performDayRollover();
+        }
+        
+        lastCheckDate = today;
+        saveBudgetState();
+    }
+    
+    function performDayRollover() {
         const today = nowKey();
         
-        if (lastCheckDate && lastCheckDate !== today && targetDays > 0 && targetStartRaw) {
-            // Load how much of yesterday's spending came from the daily limit (not credit)
-            const spentFromDailyLimit = loadNumber('spentFromLimit_' + lastCheckDate, 0);
-            const yesterdayLimit = loadNumber('dailyLimit_' + lastCheckDate, 0);
+        // Load how much of yesterday's spending came from the daily limit (not credit)
+        const spentFromDailyLimit = loadNumber('spentFromLimit_' + lastCheckDate, 0);
+        const yesterdayLimit = loadNumber('dailyLimit_' + lastCheckDate, 0);
 
-            if (yesterdayLimit > 0) {
-                if (credit === 0 && spentFromDailyLimit > yesterdayLimit) {
-                    // Connecticut Clause: overspend only possible when credit fully depleted
-                    const overspent = spentFromDailyLimit - yesterdayLimit;
-                    history.push({
-                        id: Date.now(),
-                        type: 'Connecticut Clause',
-                        amount: overspent,
-                        note: `Connecticut Clause applied after overspending Rp ${formatRupiah(overspent)} on ${lastCheckDate}`,
-                        dateKey: today,
-                        fullDate: new Date().toLocaleString('id-ID')
-                    });
-                    // No carryover penalty — next day limit is purely balance / remainingDays
-                } else if (spentFromDailyLimit < yesterdayLimit) {
-                    // Underspend: unused daily limit becomes credit (shadow wallet)
-                    const underspent = yesterdayLimit - spentFromDailyLimit;
-                    credit += underspent;
-                    saveNumber(LS_CREDIT, credit);
-                    history.push({
-                        id: Date.now() + 1,
-                        type: 'Credit',
-                        amount: underspent,
-                        note: `Underspent Rp ${formatRupiah(underspent)} on ${lastCheckDate} — added to credit`,
-                        dateKey: today,
-                        fullDate: new Date().toLocaleString('id-ID')
-                    });
-                }
+        if (yesterdayLimit > 0) {
+            if (credit === 0 && spentFromDailyLimit > yesterdayLimit) {
+                // Connecticut Clause: overspend only possible when credit fully depleted
+                const overspent = spentFromDailyLimit - yesterdayLimit;
+                history.push({
+                    id: Date.now(),
+                    type: 'Connecticut Clause',
+                    amount: overspent,
+                    note: `Connecticut Clause applied after overspending Rp ${formatRupiah(overspent)} on ${lastCheckDate}`,
+                    dateKey: today,
+                    fullDate: new Date().toLocaleString('id-ID')
+                });
+            } else if (spentFromDailyLimit < yesterdayLimit) {
+                // Underspend: unused daily limit becomes credit (shadow wallet)
+                const underspent = yesterdayLimit - spentFromDailyLimit;
+                credit += underspent;
+                history.push({
+                    id: Date.now() + 1,
+                    type: 'Credit',
+                    amount: underspent,
+                    note: `Underspent Rp ${formatRupiah(underspent)} on ${lastCheckDate} — added to credit`,
+                    dateKey: today,
+                    fullDate: new Date().toLocaleString('id-ID')
+                });
             }
-
-            // Daily limit is ALWAYS pure: floor(balance / remainingDays). Credit lives outside.
-            const remainingDays = getRemainingDays();
-            if (remainingDays > 0) {
-                todayBudget = Math.floor(balance / remainingDays);
-                saveNumber(LS_TODAY_BUDGET, todayBudget);
-                saveNumber('dailyLimit_' + today, todayBudget);
-            }
-            // Reset today's spentFromLimit tracker for the new day
-            saveNumber('spentFromLimit_' + today, 0);
-            spentFromLimitToday = 0;
-
-        } else if (!lastCheckDate && targetDays > 0 && targetStartRaw) {
-            // First-time setup for today
-            const remainingDays = getRemainingDays();
-            if (remainingDays > 0) {
-                todayBudget = Math.floor(balance / remainingDays);
-                saveNumber(LS_TODAY_BUDGET, todayBudget);
-                saveNumber('dailyLimit_' + today, todayBudget);
-            }
-            saveNumber('spentFromLimit_' + today, 0);
-            spentFromLimitToday = 0;
         }
 
-        lastCheckDate = today;
-        localStorage.setItem(LS_LAST_CHECK_DATE, today);
+        // AUDIT FIX: Check D_e >= D_t to prevent negative denominator
+        const remainingDays = getRemainingDays();
+        if (remainingDays <= 0) {
+            // Budget concluded — set todayBudget to 0 and prompt user
+            todayBudget = 0;
+            saveNumber('dailyLimit_' + today, 0);
+        } else {
+            // Daily limit is ALWAYS pure: floor(balance / remainingDays). Credit lives outside.
+            todayBudget = Math.floor(balance / remainingDays);
+            saveNumber('dailyLimit_' + today, todayBudget);
+        }
+        
+        // Reset today's spentFromLimit tracker for the new day
+        saveNumber('spentFromLimit_' + today, 0);
+        spentFromLimitToday = 0;
+        
+        // Save history and budget state atomically
+        saveJSON(LS_HISTORY, history);
+        saveBudgetState();
     }
 
     // ---------------- Budget System ----------------
@@ -478,13 +537,11 @@
                     // Credit fully covers this expense — daily limit untouched
                     credit -= amount;
                     creditUsed = amount;
-                    saveNumber(LS_CREDIT, credit);
                 } else {
                     // Credit absorbs what it can, remainder hits daily limit
                     creditUsed = credit;
                     const remainder = amount - credit;
                     credit = 0;
-                    saveNumber(LS_CREDIT, credit);
                     spentFromLimitToday += remainder;
                     limitUsed = remainder;
                     saveNumber('spentFromLimit_' + nowKey(), spentFromLimitToday);
@@ -545,7 +602,6 @@
 
         // Restore spentFromLimit to the correct day (use saved.spentFromLimitDate if present)
         const spentKeyDate = saved.spentFromLimitDate || nowKey();
-        saveNumber(LS_CREDIT, credit);
         saveNumber('spentFromLimit_' + spentKeyDate, spentFromLimitToday);
 
         // Clear saved undo snapshot so it doesn't reappear
@@ -641,16 +697,12 @@
             }
             
             const today = nowKey();
-            saveNumber(LS_TARGET_DAYS, targetDays);
-            localStorage.setItem(LS_TARGET_START, targetStartRaw);
-            saveNumber(LS_STARTING_BALANCE, startingBalance);
-            saveNumber(LS_CARRYOVER, carryover);
-            saveNumber(LS_CREDIT, credit);
-            saveNumber(LS_TODAY_BUDGET, todayBudget);
+            lastCheckDate = today;
             saveNumber('dailyLimit_' + today, todayBudget);
             saveNumber('spentFromLimit_' + today, 0);
-            localStorage.setItem(LS_LAST_CHECK_DATE, today);
-            lastCheckDate = today;
+            
+            // AUDIT FIX: Save unified budget state atomically
+            saveBudgetState();
             
             document.getElementById('resetTargetBtn').style.display = 'block';
             updateUI();
@@ -667,14 +719,10 @@
             credit = 0;
             spentFromLimitToday = 0;
             todayBudget = 0;
+            lastCheckDate = null;
             
-            removeItem(LS_TARGET_DAYS);
-            removeItem(LS_TARGET_START);
-            removeItem(LS_STARTING_BALANCE);
-            removeItem(LS_CREDIT);
-            removeItem(LS_CARRYOVER);
-            removeItem(LS_LAST_CHECK_DATE);
-            removeItem(LS_TODAY_BUDGET);
+            // AUDIT FIX: Remove unified budget state atomically
+            removeItem(LS_BUDGET_STATE);
             
             document.getElementById('resetTargetBtn').style.display = 'none';
             document.getElementById('targetDays').value = '';
@@ -814,12 +862,10 @@
 
     // ---------------- Persistence ----------------
     function persistAll() {
-        saveNumber(LS_BALANCE, balance);
+        // AUDIT FIX: Save unified budget state atomically (prevents partial corruption)
+        saveBudgetState();
         saveJSON(LS_HISTORY, history);
         // DO NOT save LS_LAST_UNDO here — only saved explicitly when undo snapshots are created
-        saveNumber(LS_CARRYOVER, carryover);
-        saveNumber(LS_CREDIT, credit);
-        saveNumber(LS_TODAY_BUDGET, todayBudget);
     }
 
     // ---------------- UI Update ----------------
@@ -870,8 +916,9 @@
             let percent = dailyBudget > 0 ? (spentToday / dailyBudget) * 100 : 0;
             pBar.style.width = Math.min(percent, 100) + '%';
 
-            if (remainingDays === 0) {
-                warningText.innerText = 'TARGET PERIOD ENDED - Click Reset to start new budget';
+            // AUDIT FIX: D_e >= D_t check to prevent negative denominator
+            if (remainingDays <= 0) {
+                warningText.innerText = 'BUDGET PERIOD ENDED — Click Reset to start new target';
                 warningText.style.color = 'var(--red)';
                 pBar.style.background = 'var(--muted)';
             } else if (percent > 100) {
@@ -979,13 +1026,10 @@
                 if (dayKey === nowKey()) {
                     spentFromLimitToday = newSpent;
                 }
-
-                saveNumber(LS_CREDIT, credit);
             } else if (deletedTransaction.type === 'Carryover') {
                 carryover -= deletedTransaction.amount;
             } else if (deletedTransaction.type === 'Credit') {
                 credit -= deletedTransaction.amount;
-                saveNumber(LS_CREDIT, credit);
             } else if (deletedTransaction.type === 'Connecticut Clause') {
                 // Connecticut Clause logs don't affect balance or carry amounts — just remove log
             }
@@ -1071,11 +1115,19 @@
     });
 
     init();
+    
+    // AUDIT FIX: Time-Delta Logic - check on page load and focus events
     setInterval(() => { 
-        checkNewDay();
+        checkDailyReset();
         persistAll();
         updateUI();
     }, 15000);
+    
+    // AUDIT FIX: Check for day change when window regains focus (prevents midnight reset bug)
+    window.addEventListener('focus', () => {
+        checkDailyReset();
+        updateUI();
+    });
     
     // AUDIT FIX: Better keyboard shortcut handling
     window.addEventListener('keydown', (e) => { 
